@@ -3,25 +3,22 @@
   @description CT胸部增强智能质控视图
   主要功能：
   1. 影像上传：支持本地DICOM文件夹拖拽上传和PACS系统模拟拉取。
-  2. AI智能分析：展示分析进度、当前步骤和实时日志。
+  2. AI智能分析：展示分析进度、当前步骤和实时日志（模拟）。
   3. 结果展示：
-     - 患者检查信息卡片
+     - 患者检查信息卡片（包含增强CT特有参数：造影剂流速、总量、注射部位等）
      - 质控评分仪表盘
      - 异常项汇总
-     - 详细质控检测项列表（按扫描时相分组）
+     - 详细质控检测项列表（按扫描时相分组：定位片、平扫期、增强I期、增强II期）
   4. 详情查看：点击质控项查看详细分析结果和影像快照（Mock）。
 
-  @api Mocks (模拟后端接口)
-  - simulatePacsSelect: 模拟从PACS系统检索影像信息
-  - startAnalysisProcess: 模拟长连接/WebSocket推送的分析流程
-  - fetchQCData: 模拟获取最终质控报告数据
+  @backend-api
+  - [MOCK] detectChestContrast: 模拟胸部增强质控检测 (src/api/quality.js)
+  - (Planned) POST /api/v1/quality/chest-contrast/detect: 真实后端检测接口
+  - (Simulated) WebSocket /ws/quality/chest-contrast/progress: 实时分析进度推送
 -->
 <template>
   <div class="chest-contrast-qc-container">
-    <!--
-      @section 顶部导航与操作栏
-      包含：面包屑导航、页面标题、状态标签、以及分析完成后的操作按钮（上传、重新分析、导出）
-    -->
+    <!-- 顶部导航与操作栏 -->
     <div class="page-header">
       <div class="header-left">
         <el-breadcrumb separator="/">
@@ -350,6 +347,7 @@
             :on-change="handleDialogFileChange"
             :on-remove="() => (selectedFile = null)"
             style="width: 100%"
+            accept=".dcm"
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">拖拽 DICOM 文件夹或 <em>点击上传</em></div>
@@ -403,8 +401,8 @@ const uploadRules = {
 
 /**
  * @function openUploadDialog
- * @description 打开上传对话框
- * @param {string} mode - 上传模式 'local' 或 'pacs'
+ * @description 打开上传对话框，重置表单状态
+ * @param {string} mode - 上传模式 'local' (本地文件) 或 'pacs' (PACS拉取)
  */
 const openUploadDialog = (mode = 'local') => {
   uploadMode.value = mode
@@ -416,7 +414,7 @@ const openUploadDialog = (mode = 'local') => {
 
 /**
  * @function handleDialogFileChange
- * @description 处理文件选择变更
+ * @description 处理文件选择变更，更新 selectedFile 状态
  * @param {File} file - Element Plus upload 组件返回的文件对象
  */
 const handleDialogFileChange = (file) => {
@@ -428,9 +426,9 @@ const handleDialogFileChange = (file) => {
  * @description 提交上传表单并触发分析流程
  *
  * 逻辑:
- * 1. 验证表单信息
+ * 1. 验证表单信息 (患者姓名、检查ID)
  * 2. 检查文件是否已选择 (Local 模式)
- * 3. 关闭弹窗并调用 startAnalysisProcess
+ * 3. 关闭弹窗并调用 startAnalysisProcess 开始分析
  */
 const submitUpload = async () => {
   if (!uploadFormRef.value) return
@@ -465,8 +463,8 @@ const analysisLogs = ref([])
  * @description 模拟从 PACS 系统选择病例
  *
  * 逻辑:
- * 1. 模拟网络请求延迟
- * 2. 自动填充患者信息
+ * 1. 模拟网络请求延迟，连接 PACS 系统
+ * 2. 自动填充模拟的患者数据
  * 3. 切换到 PACS 上传模式并打开确认弹窗
  */
 const simulatePacsSelect = () => {
@@ -539,14 +537,18 @@ const groupedQcItems = computed(() => {
 })
 
 // 重置上传 (改为打开弹窗)
+/**
+ * @function resetUpload
+ * @description 重置上传状态，重新打开上传对话框以开始新案例
+ */
 const resetUpload = () => {
   openUploadDialog()
 }
 
 /**
  * @function addLog
- * @description 添加分析日志
- * @param {string} msg - 日志消息
+ * @description 向分析日志中添加一条新记录，保持最新的 5 条日志
+ * @param {string} msg - 日志消息内容
  */
 const addLog = (msg) => {
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -557,13 +559,16 @@ const addLog = (msg) => {
 
 /**
  * @function startAnalysisProcess
- * @description 执行模拟的 AI 分析流程
+ * @description 模拟完整的 AI 分析流程
  *
  * 流程:
  * 1. 初始化状态 (analyzing, progress, logs)
  * 2. 遍历预定义的步骤数组，模拟每一步的耗时
  * 3. 在特定步骤填充模拟的患者信息
  * 4. 完成后调用 fetchQCData 获取结果
+ *
+ * @backend-api (Simulated) WebSocket /ws/quality/chest-contrast/progress
+ * @note 实际项目中，此函数将建立 WebSocket 连接监听后端进度推送
  */
 const startAnalysisProcess = async () => {
   // 清除旧数据，切换到分析视图
@@ -649,10 +654,12 @@ const scoreColor = computed(() => {
 
 /**
  * @function fetchQCData
- * @description 模拟从后端获取详细质控数据
+ * @description 获取质控检测结果数据
+ * @returns {Promise<void>} 更新 qcItems 状态
  *
- * @note 实际项目中应替换为真实 API 调用:
- * const res = await request.get(`/quality/chest-contrast/${taskId}`)
+ * @backend-api [MOCK] detectChestContrast (src/api/quality.js)
+ * @backend-api (Planned) POST /api/v1/quality/chest-contrast/detect
+ * @note 该函数模拟了向后端发送检测请求并获取完整报告的过程，结果包含按时相分组的检测项
  */
 const fetchQCData = async () => {
   analyzing.value = true
@@ -714,45 +721,58 @@ const fetchQCData = async () => {
   analyzing.value = false
 }
 
-// 详情查看
+/**
+ * @function viewDetails
+ * @description 查看单个质控项的详情，打开详情弹窗
+ * @param {Object} item - 选中的质控项对象
+ */
 const viewDetails = (item) => {
   currentItem.value = item
   dialogVisible.value = true
 }
 
-// 重新分析
+/**
+ * @function handleReanalyze
+ * @description 触发重新分析流程
+ * @backend-api (Planned) POST /api/v1/quality/chest-contrast/reanalyze
+ */
 const handleReanalyze = () => {
   ElMessage.info('正在请求云端重新计算...')
   startAnalysisProcess()
 }
 
-// 导出报告
+/**
+ * @function handleExport
+ * @description 导出质控报告
+ * @backend-api (Planned) GET /api/v1/quality/chest-contrast/report/export
+ */
 const handleExport = () => {
   ElMessage.success('报告下载链接已生成，正在下载...')
 }
 </script>
 
 <style scoped>
-/*
-  @section 页面样式
-  使用 CSS Grid 和 Flexbox 布局
-*/
+/* 容器与整体布局 */
 .chest-contrast-qc-container {
-  padding: 20px;
-  max-width: 1600px;
-  margin: 0 auto;
+  padding: 24px;
+  background-color: #f5f7fa;
+  min-height: calc(100vh - 84px); /* 减去顶部导航栏高度 */
 }
 
+/* 页面头部 */
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   margin-bottom: 24px;
 }
 
+.header-left .el-breadcrumb {
+  margin-bottom: 12px;
+}
+
 .page-title {
-  margin-top: 12px;
-  margin-bottom: 0;
+  margin: 0;
   font-size: 24px;
   color: #303133;
   display: flex;
@@ -764,40 +784,154 @@ const handleExport = () => {
   font-weight: normal;
 }
 
-/* 上传区域样式 */
+/* 1. 上传区域样式 */
 .upload-section {
-  min-height: 400px;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  background: #f5f7fa;
+  flex-direction: column;
+  /* 固定高度，确保所有页面一致 */
+  height: calc(100vh - 180px);
+  min-height: 600px;
+  background: #fff;
   border-radius: 8px;
-  border: 2px dashed #dcdfe6;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
 .upload-wrapper {
   width: 100%;
-  max-width: 800px;
+  height: 100%;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+.analyzing-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.upload-choices {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  /* 内容垂直居中 */
+  justify-content: center;
+}
+
+/* 卡片行容器 */
+.upload-choices .el-row {
+  flex: 1; /* 占据中间空间 */
+  display: flex;
+  align-items: center; /* 垂直居中 */
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto !important;
+}
+
+.upload-footer {
+  margin-top: auto; /* 推到底部 */
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+  color: #909399;
+  font-size: 13px;
   text-align: center;
 }
 
-/* 分析中状态 */
+/* 卡片选择样式 */
+.choice-card {
+  background: #f8f9fb;
+  border: 2px solid #e4e7ed;
+  border-radius: 12px;
+  padding: 32px 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  height: 220px; /* 固定卡片高度 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.choice-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #409eff;
+}
+
+.icon-wrapper {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  font-size: 36px;
+  transition: all 0.3s;
+}
+
+.local-upload .icon-wrapper {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.pacs-select .icon-wrapper {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.choice-card:hover .icon-wrapper {
+  transform: scale(1.1);
+}
+
+.choice-card h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: #303133;
+}
+
+.choice-card p {
+  margin: 0 0 5px;
+  color: #606266;
+  font-size: 14px;
+}
+
+.choice-card .sub-tip {
+  color: #909399;
+  font-size: 12px;
+}
+
+.upload-footer p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 分析动画样式 */
 .analyzing-container {
-  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
 
 .scan-animation-box {
   width: 120px;
   height: 120px;
-  background: #2b3b4e;
+  border: 4px solid #409eff;
   border-radius: 50%;
-  margin: 0 auto 24px;
   position: relative;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  margin-bottom: 30px;
   overflow: hidden;
-  box-shadow: 0 0 20px rgba(64, 158, 255, 0.3);
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.4);
 }
 
 .scan-icon {
@@ -812,123 +946,80 @@ const handleExport = () => {
   left: 0;
   width: 100%;
   height: 4px;
-  background: linear-gradient(90deg, transparent, #00ffcc, transparent);
-  animation: scan 1.5s infinite linear;
+  background: #67c23a;
+  box-shadow: 0 0 10px #67c23a;
+  animation: scanMove 1.5s linear infinite;
   z-index: 1;
 }
 
-@keyframes scan {
+@keyframes scanMove {
   0% {
-    top: 0%;
+    top: 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
   }
   100% {
     top: 100%;
+    opacity: 0;
   }
+}
+
+.progress-info {
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
 }
 
 .analyzing-title {
   font-size: 20px;
   color: #303133;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .step-display {
-  margin-top: 12px;
-  color: #606266;
+  margin-top: 15px;
   font-size: 14px;
+  color: #409eff;
+  font-weight: 500;
 }
 
 .log-window {
-  margin-top: 24px;
-  background: #1e1e1e;
-  color: #67c23a;
-  padding: 12px;
-  border-radius: 4px;
-  font-family: 'Consolas', monospace;
-  text-align: left;
+  margin-top: 20px;
   height: 120px;
-  overflow: hidden;
+  background: #2b2b2b;
+  border-radius: 4px;
+  padding: 10px 15px;
+  text-align: left;
+  overflow-y: hidden;
+  font-family: 'Consolas', monospace;
   font-size: 12px;
+  color: #a6a9ad;
 }
 
 .log-item {
   margin: 4px 0;
-  opacity: 0.9;
+  line-height: 1.4;
+  animation: fadeIn 0.3s ease;
 }
 
 .log-time {
-  color: #909399;
+  color: #67c23a;
   margin-right: 8px;
 }
 
-/* 上传选择卡片 */
-.choice-card {
-  background: white;
-  padding: 32px 20px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid #ebeef5;
-  height: 100%;
-}
-
-.choice-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  border-color: #409eff;
-}
-
-.local-upload:hover .icon-wrapper {
-  background: #ecf5ff;
-  color: #409eff;
-}
-
-.pacs-select:hover .icon-wrapper {
-  background: #f0f9eb;
-  color: #67c23a;
-}
-
-.icon-wrapper {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: #f2f6fc;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 0 auto 16px;
-  font-size: 32px;
-  color: #909399;
-  transition: all 0.3s;
-}
-
-.choice-card h3 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  color: #303133;
-}
-
-.choice-card p {
-  margin: 0;
-  color: #606266;
-  font-size: 14px;
-}
-
-.choice-card .sub-tip {
-  margin-top: 4px;
-  color: #909399;
-  font-size: 12px;
-}
-
-.upload-footer {
-  margin-top: 40px;
-  color: #909399;
-  font-size: 13px;
-}
-
-/* 结果展示样式 */
+/* 2. 结果展示样式 */
 .info-section {
   margin-bottom: 24px;
+}
+
+.patient-card,
+.score-card {
+  height: 100%;
 }
 
 .card-header {
@@ -937,33 +1028,32 @@ const handleExport = () => {
   align-items: center;
 }
 
-.score-card .el-card__body {
-  padding: 0;
-}
-
 .score-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 30px;
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .score-value {
   display: block;
   font-size: 28px;
   font-weight: bold;
+  color: #303133;
 }
 
 .score-label {
+  display: block;
   font-size: 12px;
   color: #909399;
+  margin-top: 4px;
 }
 
 .score-summary {
+  margin-top: 20px;
   width: 100%;
-  margin-top: 24px;
-  border-top: 1px solid #ebeef5;
-  padding-top: 16px;
+  padding: 0 20px;
 }
 
 .summary-item {
@@ -971,6 +1061,10 @@ const handleExport = () => {
   justify-content: space-between;
   margin-bottom: 8px;
   font-size: 14px;
+}
+
+.summary-item .label {
+  color: #606266;
 }
 
 .summary-item .value {
@@ -982,69 +1076,82 @@ const handleExport = () => {
 }
 
 .summary-result {
-  margin-top: 12px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px dashed #dcdfe6;
   text-align: center;
   font-size: 14px;
   color: #606266;
 }
 
-/* 质控列表样式 */
+/* 质控项详情样式 */
 .section-title {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .section-title h3 {
-  display: inline-flex;
-  align-items: center;
   margin: 0;
   font-size: 18px;
+  color: #303133;
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.subtitle {
-  margin-left: 12px;
+.section-title .subtitle {
   font-size: 13px;
   color: #909399;
 }
 
+.qc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px; /* 组与组之间的间距 */
+}
+
 .qc-group {
-  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* 组内列表项间距 */
 }
 
 .group-header {
   display: flex;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 12px;
   padding-left: 8px;
   border-left: 4px solid #409eff;
+  margin-bottom: 8px;
 }
 
 .group-title {
   font-size: 16px;
   font-weight: bold;
-  margin-right: 12px;
   color: #303133;
 }
 
 .qc-list-item {
   display: flex;
-  align-items: flex-start;
-  padding: 16px;
-  background: white;
+  align-items: center;
+  background: #fff;
   border: 1px solid #ebeef5;
   border-radius: 8px;
-  margin-bottom: 12px;
-  transition: all 0.2s;
+  padding: 20px 24px;
+  transition: all 0.3s;
   cursor: pointer;
 }
 
 .qc-list-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 .qc-list-item.is-error {
   border-left: 4px solid #f56c6c;
+  background: #fff5f5;
 }
 
 .qc-list-item.is-success {
@@ -1052,70 +1159,91 @@ const handleExport = () => {
 }
 
 .list-item-left {
-  margin-right: 16px;
-  padding-top: 4px;
+  margin-right: 24px;
 }
 
 .status-icon {
   font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f2f6fc;
 }
 
 .is-success .status-icon {
   color: #67c23a;
+  background: #f0f9eb;
 }
-
 .is-error .status-icon {
   color: #f56c6c;
+  background: #fef0f0;
 }
 
 .list-item-main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .item-header {
   display: flex;
   align-items: center;
-  margin-bottom: 6px;
+  gap: 12px;
 }
 
 .item-name {
   font-size: 16px;
-  font-weight: bold;
-  margin-right: 12px;
+  font-weight: 600;
   color: #303133;
 }
 
 .item-desc {
   font-size: 14px;
   color: #606266;
-  margin-bottom: 6px;
+  line-height: 1.5;
 }
 
 .item-detail-text {
   font-size: 13px;
   color: #f56c6c;
-  background: #fef0f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  background: rgba(245, 108, 108, 0.1);
   padding: 4px 8px;
   border-radius: 4px;
-  display: inline-block;
+  width: fit-content;
 }
 
 .list-item-right {
+  margin-left: 20px;
   display: flex;
   align-items: center;
-  margin-left: 16px;
-  align-self: center;
+}
+
+/* Dialog 内容 */
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .mock-image-placeholder {
-  margin-top: 20px;
-  border: 1px dashed #dcdfe6;
-  border-radius: 8px;
-  padding: 20px;
-  background: #fafafa;
+  width: 100%;
+  height: 300px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-/* 动画 */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;

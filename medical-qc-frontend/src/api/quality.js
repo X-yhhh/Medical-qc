@@ -1,19 +1,31 @@
-// src/api/quality.js
 // ----------------------------------------------------------------------------------
 // 质控模块前端 API (Quality API)
-// 作用：提供各类影像质控检测的接口调用。
-// 说明：目前除脑出血检测外，其他质控项使用 Mock (模拟) 数据。
-// 对接后端：/api/v1/quality
+// ----------------------------------------------------------------------------------
+// @file src/api/quality.js
+// @description 封装质控模块所有与后端交互的 API 请求。
+//              包含真实 AI 算法接口（脑出血）和用于演示的模拟接口（其他质控项）。
+// @module API/Quality
+//
+// 对应后端服务:
+// - Base URL: /api/v1/quality
+// - 路由文件: app/api/v1/quality.py (Python Backend)
 // ----------------------------------------------------------------------------------
 
 import request from '@/utils/request'
 
-// ======================
-// 模拟接口 (Mock APIs)
-// 作用：前端演示用，暂未对接真实后端算法
-// ======================
+// ==================================================================================
+// 1. 模拟接口 (Mock APIs)
+// 作用：用于前端演示和开发，暂未接入真实后端算法服务。
+// ==================================================================================
 
-// 模拟：头部平扫质控
+/**
+ * @function detectHead
+ * @description [MOCK] 模拟 CT 头部平扫质控检测
+ * @param {File} file - 上传的影像文件 (虽然是模拟，但保留接口签名一致性)
+ * @returns {Promise<Object>} 返回包含质控问题列表和耗时的 Promise
+ *
+ * @backend-api (Pending) POST /api/v1/quality/head/detect
+ */
 export const detectHead = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -31,7 +43,14 @@ export const detectHead = (file) => {
   })
 }
 
-// 模拟：胸部平扫质控
+/**
+ * @function detectChestNonContrast
+ * @description [MOCK] 模拟 CT 胸部平扫质控检测
+ * @param {File} file - 上传的影像文件
+ * @returns {Promise<Object>} 返回包含质控问题列表和耗时的 Promise
+ *
+ * @backend-api (Pending) POST /api/v1/quality/chest-non-contrast/detect
+ */
 export const detectChestNonContrast = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -47,7 +66,14 @@ export const detectChestNonContrast = (file) => {
   })
 }
 
-// 模拟：胸部增强质控
+/**
+ * @function detectChestContrast
+ * @description [MOCK] 模拟 CT 胸部增强质控检测
+ * @param {File} file - 上传的影像文件
+ * @returns {Promise<Object>} 返回包含质控问题列表和耗时的 Promise
+ *
+ * @backend-api (Pending) POST /api/v1/quality/chest-contrast/detect
+ */
 export const detectChestContrast = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -63,7 +89,14 @@ export const detectChestContrast = (file) => {
   })
 }
 
-// 模拟：冠脉CTA质控
+/**
+ * @function detectCoronaryCTA
+ * @description [MOCK] 模拟冠脉 CTA 质控检测
+ * @param {File} file - 上传的影像文件
+ * @returns {Promise<Object>} 返回包含质控问题列表和耗时的 Promise
+ *
+ * @backend-api (Pending) POST /api/v1/quality/coronary-cta/detect
+ */
 export const detectCoronaryCTA = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -79,13 +112,21 @@ export const detectCoronaryCTA = (file) => {
   })
 }
 
-// ======================
-// 真实接口 (Real APIs)
-// 作用：对接后端 AI 服务
-// ======================
+// ==================================================================================
+// 2. 真实接口 (Real APIs)
+// 作用：对接真实后端 AI 算法服务
+// ==================================================================================
 
-// 脑出血智能检测
-// 对接后端：POST /api/v1/quality/hemorrhage
+/**
+ * @function predictHemorrhage
+ * @description 脑出血智能检测 (Real AI Service)
+ * @param {File} file - DICOM/图片文件
+ * @param {Object} metadata - 额外的元数据 (如患者姓名、检查ID)
+ * @returns {Promise<Object>} 后端返回的检测结果
+ *
+ * @backend-api POST /api/v1/quality/hemorrhage
+ * @note 使用 multipart/form-data 格式上传
+ */
 export const predictHemorrhage = async (file, metadata = {}) => {
   const formData = new FormData()
   formData.append('file', file)
@@ -93,7 +134,6 @@ export const predictHemorrhage = async (file, metadata = {}) => {
   if (metadata.examId) formData.append('exam_id', metadata.examId)
 
   try {
-    // 修正：后端接口路径为 /quality/hemorrhage
     const response = await request.post('/quality/hemorrhage', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
@@ -113,8 +153,14 @@ export const predictHemorrhage = async (file, metadata = {}) => {
   }
 }
 
-// 获取历史检测记录
-// 对接后端：待实现
+/**
+ * @function getHemorrhageHistory
+ * @description 获取脑出血质控历史记录
+ * @param {number} limit - 获取记录的数量限制
+ * @returns {Promise<Object>} 历史记录列表
+ *
+ * @backend-api (Planned) GET /api/v1/quality/hemorrhage/history
+ */
 export const getHemorrhageHistory = async (limit = 20) => {
   try {
     // TODO: 后端暂未实现此接口，预留位置

@@ -2,6 +2,11 @@
 # ----------------------------------------------------------------------------------
 # 应用程序入口 (Main Entry)
 # 作用：FastAPI 应用的启动入口，负责挂载路由、中间件、静态资源和事件处理。
+#       作为后端服务的核心调度器，将请求分发至各个 API 模块。
+# 对接模块：
+#   - 路由模块: app.api.v1.* (auth, quality, summary)
+#   - 数据库: app.utils.database (初始化连接)
+#   - 前端入口: src/main.js (API Base URL 配置)
 # ----------------------------------------------------------------------------------
 
 from pathlib import Path
@@ -44,7 +49,12 @@ TEMP_DIR = BASE_DIR / "temp"
 # ----------------------------------------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
-    # 自动创建表结构 (生产环境建议使用 Alembic 迁移)
+    """
+    应用启动时的初始化操作
+    1. 创建数据库表 (仅用于开发环境，生产环境应使用 Alembic)
+    2. 创建必要的存储目录 (data, temp)
+    """
+    # 自动创建表结构
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
@@ -56,6 +66,7 @@ async def startup_event():
 # 静态资源挂载
 # ----------------------------------------------------------------------------------
 # 挂载上传目录 (用于访问检测图片)
+# URL: /static/hemorrhage/filename.png
 app.mount("/static/hemorrhage", StaticFiles(directory=str(UPLOAD_DIR)), name="hemorrhage_images")
 
 # 挂载通用静态资源 (如果存在)
@@ -68,10 +79,8 @@ if STATIC_DIR.exists():
 # ----------------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", # 前端开发端口
-        "http://127.0.0.1:5173", 
-    ],
+    # 允许所有来源，解决开发环境下的 "Network Error" 问题
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -92,6 +101,10 @@ app.mount("/api/v1/temp", StaticFiles(directory=str(TEMP_DIR)), name="temp")
 # ----------------------------------------------------------------------------------
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    """
+    全局异常捕获
+    作用：捕获所有未处理异常，返回 500 JSON 响应，防止应用崩溃。
+    """
     traceback.print_exc()
     return JSONResponse(
         status_code=500,

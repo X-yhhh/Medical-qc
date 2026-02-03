@@ -1,3 +1,16 @@
+<!--
+  @file src/views/quality/Head.vue
+  @description CT头部平扫质控主页面
+  主要功能:
+  1. 影像上传: 支持本地 DICOM 文件夹拖拽上传和 PACS 系统模拟拉取
+  2. AI 智能分析: 展示分析进度、当前步骤和实时日志
+  3. 结果展示: 患者信息、质控评分、质控项列表
+  4. 交互: 重新分析、导出报告、查看详情
+
+  @backend-api 对接接口:
+  - [POST] /api/v1/quality/head/detect (模拟: detectHead) - 头部质控检测
+  - [GET] /api/v1/quality/head/report/export (模拟) - 导出报告
+-->
 <template>
   <div class="head-qc-container">
     <!--
@@ -310,6 +323,7 @@
             :on-change="handleDialogFileChange"
             :on-remove="() => (selectedFile = null)"
             style="width: 100%"
+            accept=".dcm"
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">拖拽 DICOM 文件夹或 <em>点击上传</em></div>
@@ -339,12 +353,11 @@
 <script setup>
 /**
  * @file Head.vue
- * @description CT头部平扫质控主页面
+ * @description CT头部平扫质控主页面逻辑
  * 包含影像上传（本地/PACS）、AI分析进度展示、质控结果报告展示。
  *
- * 对接API:
- * - 本页面目前主要使用前端模拟数据 (Mock Mode) 进行演示。
- * - 真实场景下应调用 /api/quality/head/analyze 等接口。
+ * @api-dependencies
+ * - src/api/quality.js: detectHead (Mock)
  */
 
 import { ref, computed, onMounted, nextTick, reactive } from 'vue'
@@ -477,8 +490,11 @@ const addLog = (msg) => {
 }
 
 /**
- * 模拟 AI 分析全流程
+ * @function startAnalysisProcess
+ * @description 模拟 AI 分析全流程
  * 包含：DICOM解析 -> 完整性校验 -> 元数据提取 -> 模型加载 -> 特征提取 -> 报告生成
+ *
+ * @backend-api [WebSocket] /ws/quality/head/progress (模拟) - 获取分析进度
  */
 const startAnalysisProcess = async () => {
   // 1. 初始化状态
@@ -553,82 +569,72 @@ const scoreColor = computed(() => {
 })
 
 /**
- * 获取质控数据
- * @api [MOCK] 模拟后端返回的质控报告数据
- * 对应真实接口: GET /api/quality/head/report
+ * @function fetchQCData
+ * @description 获取质控检测结果数据
+ * @returns {Promise<void>} 更新 qcItems 状态
+ *
+ * @backend-api [POST] /api/v1/quality/head/detect (对应前端 mock API: detectHead)
  */
 const fetchQCData = async () => {
   analyzing.value = true
+  // 模拟网络延迟
   await new Promise((resolve) => setTimeout(resolve, 300))
 
-  // 模拟返回数据 - CT头部平扫质控项 (10项)
+  // 模拟数据生成 logic moved here or imported
+  // 在真实对接中，此处应调用:
+  // const res = await detectHead(selectedFile.value)
+  // qcItems.value = res.issues
+
+  // 恢复之前的模拟数据逻辑 (为了保持演示效果，这里暂时硬编码生成)
   qcItems.value = [
     {
-      name: 'CT头部运动伪影',
-      description: '检查是否存在因患者头部运动导致的图像模糊或重影',
+      name: '扫描覆盖范围',
       status: '合格',
-      detail: '未检测到明显运动伪影',
+      description: '扫描范围应覆盖从颅底至颅顶完整区域',
+      detail: '',
+    },
+    {
+      name: '体位不正',
+      status: '合格',
+      description: '正中矢状面应与扫描架中心线重合',
+      detail: '',
+    },
+    {
+      name: '运动伪影',
+      status: Math.random() > 0.8 ? '不合格' : '合格',
+      description: '图像中不应出现因患者运动导致的模糊或重影',
+      detail: '检测到明显层间错位，建议固定头部后重新扫描',
     },
     {
       name: '金属伪影',
-      description: '检测牙科填充物、弹簧圈等金属异物引起的放射状伪影',
+      status: Math.random() > 0.9 ? '不合格' : '合格',
+      description: '应避免假牙、发卡等金属异物干扰',
+      detail: '颅底区域存在放射状金属伪影，影响后颅窝观察',
+    },
+    {
+      name: '层厚层间距',
       status: '合格',
-      detail: '无金属伪影',
+      description: '常规扫描层厚应≤5mm',
+      detail: '',
     },
     {
-      name: '范围不全',
-      description: '扫描范围应覆盖颅底至颅顶完整结构',
-      status: '不合格',
-      detail: '颅顶部分层面缺失，建议增加扫描层数',
-    },
-    {
-      name: 'FOV过大',
-      description: '视野范围过大导致图像有效分辨率降低',
+      name: '剂量控制 (CTDI)',
       status: '合格',
-      detail: 'FOV 设置合理',
-    },
-    {
-      name: 'FOV过小',
-      description: '视野范围过小导致颅骨或皮肤部分截断',
-      status: '合格',
-      detail: '目标区域完整',
-    },
-    {
-      name: '左右不对称',
-      description: '评估双侧颞骨、眼眶等解剖结构对称性',
-      status: '合格',
-      detail: '双侧结构对称',
-    },
-    {
-      name: '图像偏转',
-      description: '头部中线与图像垂直轴线的偏转角度',
-      status: '不合格',
-      detail: '头部向右偏转约 8°，建议调整体位',
-    },
-    {
-      name: '图像左右不居中',
-      description: '图像主体应位于视野水平中心',
-      status: '合格',
-      detail: '水平居中良好',
-    },
-    {
-      name: '图像上下不居中',
-      description: '图像主体应位于视野垂直中心',
-      status: '合格',
-      detail: '垂直居中良好',
-    },
-    {
-      name: '扫描基线不平行',
-      description: '扫描基线应与听眦线(OML)或听眶线平行',
-      status: '不合格',
-      detail: '基线偏离 OML 约 15°，可能影响后颅窝观察',
+      description: 'CTDIvol 应低于参考水平 (60 mGy)',
+      detail: '',
     },
   ]
 
   analyzing.value = false
 }
 
-// 重新分析 (手动触发)
+/**
+ * @function handleReanalyze
+ * @description 触发重新分析流程
+ * 调用 fetchQCData 获取最新的质控结果
+ *
+ * @backend-api [POST] /api/v1/quality/head/detect (复用检测接口)
+ */
 const handleReanalyze = () => {
   ElMessage.info('正在请求云端 AI 重新分析...')
   fetchQCData().then(() => {
@@ -636,24 +642,42 @@ const handleReanalyze = () => {
   })
 }
 
-// 导出报告
+/**
+ * @function handleExport
+ * @description 导出质控报告
+ *
+ * @backend-api [GET] /api/v1/quality/head/report/export (模拟)
+ */
 const handleExport = () => {
   ElMessage.success('质控报告已生成并开始下载')
 }
 
-// 查看详情弹窗
+/**
+ * @function viewDetails
+ * @description 查看质控项详情
+ * @param {Object} item - 选中的质控项数据
+ */
 const viewDetails = (item) => {
   currentItem.value = item
   dialogVisible.value = true
 }
 
-// 忽略问题 (暂未启用)
+/**
+ * @function ignoreIssue
+ * @description 忽略特定的质控异常
+ * @param {Object} item - 质控项
+ *
+ * @backend-api [POST] /api/v1/quality/head/issue/ignore (计划中)
+ */
 const ignoreIssue = (item) => {
   item.status = '合格'
   ElMessage.success(`已忽略 "${item.name}" 的异常标记`)
 }
 
-// 重置上传
+/**
+ * @function resetUpload
+ * @description 重置页面状态至初始上传界面
+ */
 const resetUpload = () => {
   openUploadDialog()
 }

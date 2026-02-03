@@ -3,7 +3,12 @@
 # 异常汇总模块 API (Summary API)
 # 作用：提供“异常汇总”页面的数据支持，包括统计看板、趋势图、分布图和异常列表。
 # 注意：目前部分接口使用模拟数据 (Mock)，后续将连接数据库进行真实统计。
-# 对接前端：views/summary/index.vue
+# 对接前端：
+#   - views/summary/index.vue (整个异常汇总页面)
+#   - components/summary/StatCard.vue (统计卡片)
+#   - components/summary/TrendChart.vue (趋势图)
+#   - components/summary/DistributionChart.vue (分布图)
+#   - components/summary/IssueList.vue (异常列表)
 # ----------------------------------------------------------------------------------
 
 from fastapi import APIRouter, Depends, Query
@@ -20,6 +25,7 @@ router = APIRouter()
 # 接口：获取汇总统计数据
 # URL: GET /api/v1/summary/stats
 # 作用：返回看板顶部的关键指标（总异常数、今日异常、待处理等）。
+# 对接前端：views/summary/index.vue 中的 fetchStats 方法
 # ----------------------------------------------------------------------------------
 @router.get("/stats", response_model=Dict[str, Any])
 def get_summary_stats(
@@ -27,6 +33,16 @@ def get_summary_stats(
 ):
     """
     获取异常汇总统计数据
+    
+    作用：
+        查询并计算全院影像质控的关键指标。
+    
+    返回字段：
+        totalIssues: 累计异常总数
+        todayIssues: 今日新增异常
+        pendingIssues: 待处理异常
+        resolutionRate: 解决率 (%)
+        avgResolutionTime: 平均处理时间 (小时)
     """
     # TODO: 替换为真实数据库查询 (Count queries)
     # 模拟数据
@@ -43,6 +59,7 @@ def get_summary_stats(
 # URL: GET /api/v1/summary/trend
 # 作用：返回指定天数内的异常数量趋势，用于 ECharts 折线图。
 # 参数：days (默认7天)
+# 对接前端：views/summary/index.vue 中的 fetchTrend 方法 (对应 ECharts 组件)
 # ----------------------------------------------------------------------------------
 @router.get("/trend", response_model=Dict[str, Any])
 def get_issue_trend(
@@ -51,6 +68,12 @@ def get_issue_trend(
 ):
     """
     获取异常趋势数据
+    
+    作用：
+        统计过去 N 天每天的异常检出数量和已解决数量。
+    
+    参数：
+        days: 统计天数范围 (1-365)
     """
     dates = []
     counts = []
@@ -73,6 +96,7 @@ def get_issue_trend(
 # 接口：获取异常分布数据
 # URL: GET /api/v1/summary/distribution
 # 作用：返回各类异常类型的占比，用于 ECharts 饼图。
+# 对接前端：views/summary/index.vue 中的 fetchDistribution 方法
 # ----------------------------------------------------------------------------------
 @router.get("/distribution", response_model=List[Dict[str, Any]])
 def get_issue_distribution(
@@ -80,6 +104,9 @@ def get_issue_distribution(
 ):
     """
     获取异常类型分布数据
+    
+    作用：
+        统计各类质控问题（如伪影、扫描范围不足等）的分布情况。
     """
     # 模拟常见质控问题分布
     return [
@@ -95,6 +122,7 @@ def get_issue_distribution(
 # URL: GET /api/v1/summary/recent
 # 作用：返回分页的异常记录列表，支持搜索和状态过滤。
 # 参数：page (页码), limit (每页数量), query (搜索关键词), status (状态)
+# 对接前端：views/summary/index.vue 中的 fetchRecentIssues 方法 (表格组件)
 # ----------------------------------------------------------------------------------
 @router.get("/recent", response_model=Dict[str, Any])
 def get_recent_issues(
@@ -106,6 +134,10 @@ def get_recent_issues(
 ):
     """
     获取最近异常记录列表
+    
+    作用：
+        获取最新的质控异常记录，用于列表展示。
+        支持分页、关键词搜索和状态筛选。
     """
     # 模拟列表数据
     list_data = []

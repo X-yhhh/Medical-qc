@@ -3,6 +3,9 @@
 # JWT 工具模块 (JWT Utilities)
 # 作用：提供独立的 JWT 编码和解码验证功能。
 # 注意：部分功能与 app.core.security 重叠，建议后续合并。
+# 对接前端：
+#   - 生成的 Token 会被前端存储在 localStorage 中。
+#   - 验证失败时返回 401，前端拦截器会据此跳转回登录页。
 # ----------------------------------------------------------------------------------
 
 import jwt
@@ -19,6 +22,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # ----------------------------------------------------------------------------------
 # 函数：创建 Access Token
 # 作用：生成包含过期时间的 JWT 字符串。
+# 参数：data (Payload 数据), expires_delta (过期时间增量)
 # ----------------------------------------------------------------------------------
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

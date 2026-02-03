@@ -10,11 +10,11 @@
      - 异常项汇总
      - 详细质控检测项列表（心率控制、血管强化、血管显示等）
   4. 详情查看：点击质控项查看详细分析结果和影像快照（Mock）。
-  
-  @api Mocks (模拟后端接口)
-  - simulatePacsSelect: 模拟从PACS系统检索影像信息
-  - startAnalysisProcess: 模拟长连接/WebSocket推送的分析流程
-  - fetchQCData: 模拟获取最终质控报告数据
+
+  @backend-api
+  - [MOCK] detectCoronaryCTA: 模拟冠脉质控检测 (src/api/quality.js)
+  - (Planned) POST /api/v1/quality/coronary-cta/detect: 真实后端检测接口
+  - (Simulated) WebSocket /ws/quality/coronary-cta/progress: 实时分析进度推送
 -->
 <template>
   <div class="coronary-qc-container">
@@ -327,6 +327,7 @@
             :on-change="handleDialogFileChange"
             :on-remove="() => (selectedFile = null)"
             style="width: 100%"
+            accept=".dcm"
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">拖拽 DICOM 文件夹或 <em>点击上传</em></div>
@@ -403,8 +404,8 @@ const uploadRules = {
 
 /**
  * @function openUploadDialog
- * @description 打开上传对话框
- * @param {string} mode - 上传模式 'local' 或 'pacs'
+ * @description 打开上传对话框，重置表单状态
+ * @param {string} mode - 上传模式 'local' (本地文件) 或 'pacs' (PACS拉取)
  */
 const openUploadDialog = (mode = 'local') => {
   uploadMode.value = mode
@@ -416,8 +417,8 @@ const openUploadDialog = (mode = 'local') => {
 
 /**
  * @function handleDialogFileChange
- * @description 处理文件选择变更
- * @param {File} file - 选中的文件对象
+ * @description 处理文件选择变更，更新 selectedFile 状态
+ * @param {File} file - Element Plus 上传组件选中的文件对象
  */
 const handleDialogFileChange = (file) => {
   selectedFile.value = file
@@ -426,11 +427,11 @@ const handleDialogFileChange = (file) => {
 /**
  * @function submitUpload
  * @description 提交上传表单并触发分析流程
- * 
+ *
  * 逻辑:
- * 1. 验证表单信息
+ * 1. 验证表单信息 (患者姓名、检查ID)
  * 2. 检查文件是否已选择 (Local 模式)
- * 3. 关闭弹窗并调用 startAnalysisProcess
+ * 3. 关闭弹窗并调用 startAnalysisProcess 开始分析
  */
 const submitUpload = async () => {
   if (!uploadFormRef.value) return
@@ -463,6 +464,12 @@ const analysisLogs = ref([])
 /**
  * @function simulatePacsSelect
  * @description 模拟从 PACS 系统选择影像
+ * 
+ * 逻辑:
+ * 1. 模拟与 PACS 系统建立连接
+ * 2. 模拟检索患者列表
+ * 3. 自动填充患者信息到上传表单
+ * 4. 切换到 PACS 模式并打开确认弹窗
  */
 const simulatePacsSelect = () => {
   ElMessage.success('已连接 PACS 系统，正在检索今日检查列表...')
@@ -508,7 +515,7 @@ const qcItems = ref([])
 
 /**
  * @function resetUpload
- * @description 重置上传状态，打开上传对话框
+ * @description 重置上传状态，重新打开上传对话框以开始新案例
  */
 const resetUpload = () => {
   openUploadDialog()
@@ -516,8 +523,8 @@ const resetUpload = () => {
 
 /**
  * @function addLog
- * @description 向分析日志中添加一条新记录
- * @param {string} msg - 日志消息
+ * @description 向分析日志中添加一条新记录，保持最新的 5 条日志
+ * @param {string} msg - 日志消息内容
  */
 const addLog = (msg) => {
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -530,6 +537,9 @@ const addLog = (msg) => {
  * @function startAnalysisProcess
  * @description 模拟完整的 AI 分析流程
  * 包含多个步骤：DICOM解析 -> 完整性校验 -> 元数据提取 -> 模型加载 -> 血管提取 -> 特征分析 -> 报告生成
+ *
+ * @backend-api (Simulated) WebSocket /ws/quality/coronary-cta/progress
+ * @note 实际项目中，此函数将建立 WebSocket 连接监听后端进度推送
  */
 const startAnalysisProcess = async () => {
   // 清除旧数据，切换到分析视图
@@ -612,65 +622,94 @@ const scoreColor = computed(() => {
 
 /**
  * @function fetchQCData
- * @description 模拟后端 API 请求获取质控结果
+ * @description 获取质控检测结果数据
+ * @returns {Promise<void>} 更新 qcItems 状态
+ *
+ * @backend-api [MOCK] detectCoronaryCTA (src/api/quality.js)
+ * @backend-api (Planned) POST /api/v1/quality/coronary-cta/detect
+ * @note 该函数模拟了向后端发送检测请求并获取完整报告的过程
  */
 const fetchQCData = async () => {
   analyzing.value = true
-  // 模拟网络延迟 (缩短)
+  // 模拟网络延迟
   await new Promise((resolve) => setTimeout(resolve, 300))
 
-  // 模拟返回数据 - 冠脉CTA质控项
+  // 模拟数据生成
+  // 真实场景: const res = await detectCoronaryCTA(selectedFile.value)
+
+  // 模拟返回数据 - 冠脉CTA质控项 (12项)
   qcItems.value = [
     {
       name: '心率控制',
-      description: '扫描期间心率稳定，建议 < 70 bpm',
-      status: patientInfo.value.heartRate > 75 ? '不合格' : '合格',
-      detail:
-        patientInfo.value.heartRate > 75
-          ? `平均心率 ${patientInfo.value.heartRate} bpm，可能导致运动伪影`
-          : '心率控制良好',
-    },
-    {
-      name: '心率波动',
-      description: '扫描期间心率波动应 < 5 bpm',
+      description: '检查扫描期间平均心率是否符合重建要求',
       status: '合格',
-      detail: `波动幅度 ${patientInfo.value.hrVariability} bpm，节律稳定`,
+      detail: '平均心率 62 bpm (<=75 bpm)',
     },
     {
-      name: '血管强化 (AO Root)',
-      description: '主动脉根部 CT 值应 > 350 HU',
+      name: '心率稳定性',
+      description: '检查扫描期间心率波动情况',
       status: '合格',
-      detail: '主动脉根部 CT 值 420 HU，强化充分',
+      detail: '心率波动 < 5 bpm',
     },
     {
-      name: '右冠状动脉 (RCA) 显示',
-      description: 'RCA 远端血管边缘锐利，无断层',
+      name: '呼吸配合',
+      description: '检查是否存在呼吸运动伪影',
       status: '合格',
-      detail: 'RCA 全程显示清晰',
+      detail: '膈肌位置稳定',
     },
     {
-      name: '左前降支 (LAD) 显示',
-      description: 'LAD 远端及对角支显示清晰',
+      name: '血管强化 (AO)',
+      description: '升主动脉根部 CT 值',
       status: '合格',
-      detail: 'LAD 充盈良好',
+      detail: 'CT值 380 HU (>=300 HU)',
     },
     {
-      name: '左回旋支 (LCX) 显示',
-      description: 'LCX 远端及钝缘支显示清晰',
+      name: '血管强化 (LAD)',
+      description: '左前降支远端 CT 值',
+      status: '合格',
+      detail: 'CT值 280 HU (>=250 HU)',
+    },
+    {
+      name: '血管强化 (RCA)',
+      description: '右冠状动脉远端 CT 值',
       status: '不合格',
-      detail: 'LCX 远端显影稍淡，疑有对比剂充盈不足',
+      detail: 'CT值 210 HU (<250 HU)，强化稍显不足',
     },
     {
-      name: 'Z轴覆盖范围',
-      description: '需完整覆盖气管隆突下至心脏膈面',
+      name: '噪声水平',
+      description: '主动脉根部图像噪声 (SD)',
       status: '合格',
-      detail: '心脏解剖结构完整',
+      detail: 'SD = 22 HU (<=30 HU)',
     },
     {
-      name: '金属/钙化伪影',
-      description: '评估严重钙化或支架导致的伪影干扰',
+      name: '钙化积分影响',
+      description: '严重钙化斑块导致的伪影干扰',
       status: '合格',
-      detail: '无严重伪影干扰',
+      detail: '无严重钙化干扰',
+    },
+    {
+      name: '台阶伪影',
+      description: '因心率不齐或屏气不佳导致的层面错位',
+      status: '合格',
+      detail: '血管连续性良好',
+    },
+    {
+      name: '心电门控',
+      description: 'ECG 信号同步状态',
+      status: '合格',
+      detail: 'R波触发准确',
+    },
+    {
+      name: '扫描范围',
+      description: '覆盖气管分叉至心脏膈面下',
+      status: '合格',
+      detail: '心脏包络完整',
+    },
+    {
+      name: '金属/线束伪影',
+      description: '上腔静脉高浓度对比剂或电极片伪影',
+      status: '不合格',
+      detail: '上腔静脉硬化伪影干扰 RCA 近段观察',
     },
   ]
 
@@ -680,6 +719,7 @@ const fetchQCData = async () => {
 /**
  * @function handleReanalyze
  * @description 触发重新分析流程
+ * @backend-api (Planned) POST /api/v1/quality/coronary-cta/reanalyze
  */
 const handleReanalyze = () => {
   ElMessage.info('正在请求云端 AI 重新分析...')
@@ -691,6 +731,7 @@ const handleReanalyze = () => {
 /**
  * @function handleExport
  * @description 导出质控报告
+ * @backend-api (Planned) GET /api/v1/quality/coronary-cta/report/export
  */
 const handleExport = () => {
   ElMessage.success('质控报告已生成并开始下载')
@@ -698,8 +739,8 @@ const handleExport = () => {
 
 /**
  * @function viewDetails
- * @description 查看单个质控项的详情
- * @param {Object} item - 选中的质控项对象
+ * @description 查看单个质控项的详情，打开详情弹窗
+ * @param {Object} item - 选中的质控项对象，包含名称、状态、描述等信息
  */
 const viewDetails = (item) => {
   currentItem.value = item
@@ -708,11 +749,6 @@ const viewDetails = (item) => {
 </script>
 
 <style scoped>
-/* 
- * @section Styles
- * @description 页面样式定义
- */
-
 /* 容器与整体布局 */
 .coronary-qc-container {
   padding: 24px;
@@ -961,25 +997,25 @@ const viewDetails = (item) => {
 
 .log-window {
   margin-top: 20px;
-  height: 100px;
-  background: #f5f7fa;
+  height: 120px;
+  background: #2b2b2b;
   border-radius: 4px;
-  padding: 10px;
-  overflow: hidden;
+  padding: 10px 15px;
   text-align: left;
-  font-family: monospace;
+  overflow-y: hidden;
+  font-family: 'Consolas', monospace;
   font-size: 12px;
-  border: 1px solid #e4e7ed;
+  color: #a6a9ad;
 }
 
 .log-item {
   margin: 4px 0;
-  color: #606266;
+  line-height: 1.4;
   animation: slide-up 0.3s ease-out;
 }
 
 .log-time {
-  color: #909399;
+  color: #67c23a;
   margin-right: 8px;
 }
 
@@ -1100,103 +1136,108 @@ const viewDetails = (item) => {
 .qc-list-item {
   display: flex;
   align-items: center;
-  padding: 20px;
+  background: #fff;
   border: 1px solid #ebeef5;
   border-radius: 8px;
-  transition: all 0.2s;
+  padding: 20px 24px;
+  transition: all 0.3s;
   cursor: pointer;
-  background-color: #fff;
 }
 
 .qc-list-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
 
-/* 状态颜色边框 */
 .qc-list-item.is-error {
   border-left: 4px solid #f56c6c;
-  background-color: #fef0f0;
+  background: #fff5f5;
 }
 
 .qc-list-item.is-success {
   border-left: 4px solid #67c23a;
-  background-color: #f0f9eb;
 }
 
 .list-item-left {
-  margin-right: 20px;
+  margin-right: 24px;
 }
 
 .status-icon {
   font-size: 24px;
-}
-
-.is-error .status-icon {
-  color: #f56c6c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f2f6fc;
 }
 
 .is-success .status-icon {
   color: #67c23a;
+  background: #f0f9eb;
+}
+.is-error .status-icon {
+  color: #f56c6c;
+  background: #fef0f0;
 }
 
 .list-item-main {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .item-header {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-bottom: 6px;
 }
 
 .item-name {
   font-size: 16px;
-  font-weight: bold;
+  font-weight: 600;
   color: #303133;
 }
 
 .item-desc {
   font-size: 14px;
   color: #606266;
+  margin-bottom: 6px;
 }
 
 .item-detail-text {
   font-size: 13px;
-  margin-top: 4px;
-}
-
-.error-text {
   color: #f56c6c;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  margin-top: 4px;
+  background: rgba(245, 108, 108, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: fit-content;
 }
 
 .list-item-right {
   margin-left: 20px;
 }
 
-/* 弹窗内容 */
+/* 弹窗样式 */
 .dialog-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  padding: 10px;
 }
 
 .mock-image-placeholder {
-  background: #000;
-  height: 300px;
+  margin-top: 20px;
+  height: 200px;
+  background-color: #f0f2f5;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
 }
 
-/* 动画 */
+/* 动画通用类 */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -1205,16 +1246,5 @@ const viewDetails = (item) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 </style>

@@ -190,12 +190,15 @@
             :class="{ 'is-error': item.status === '异常', 'is-success': item.status === '正常' }"
             @click="viewDetails(item)"
           >
+            <!-- 左侧：图标与状态 -->
             <div class="list-item-left">
               <div class="status-icon">
                 <el-icon v-if="item.status === '正常'"><CircleCheckFilled /></el-icon>
                 <el-icon v-else><WarningFilled /></el-icon>
               </div>
             </div>
+
+            <!-- 中间：信息主体 -->
             <div class="list-item-main">
               <div class="item-header">
                 <span class="item-name">{{ item.name }}</span>
@@ -208,13 +211,22 @@
                   {{ item.status }}
                 </el-tag>
               </div>
-              <div class="item-desc">{{ item.description }}</div>
+              <div class="item-desc">
+                {{ item.description }}
+              </div>
+              <!-- 异常详情提示 -->
               <div class="item-detail-text" v-if="item.status === '异常'">
-                 <span class="error-text"><el-icon><InfoFilled /></el-icon> {{ item.detail }}</span>
+                <span class="error-text"
+                  ><el-icon><InfoFilled /></el-icon> {{ item.detail }}</span
+                >
               </div>
             </div>
+
+            <!-- 右侧：查看详情按钮 -->
             <div class="list-item-right">
-               <el-button type="primary" link>详情 <el-icon><ArrowRight /></el-icon></el-button>
+              <el-button type="primary" link @click.stop="viewDetails(item)">
+                查看详情 <el-icon class="el-icon--right"><ArrowRight /></el-icon>
+              </el-button>
             </div>
           </div>
         </div>
@@ -332,14 +344,24 @@
   </div>
 </template>
 
+<!--
+  @file src/views/quality/Hemorrhage.vue
+  @description 头部出血 AI 智能检测视图
+  功能：
+  1. 提供影像上传（本地/PACS）界面。
+  2. 展示 AI 分析进度与实时日志。
+  3. 显示脑出血检测结果、置信度及风险评分。
+  4. 渲染可疑出血区域的 BBox 标注。
+  5. 展示中线偏移与脑室结构的分析详情。
+
+  @backend-api 对接接口:
+  - [POST] /api/v1/quality/hemorrhage (真实: predictHemorrhage) - 脑出血检测
+  - [GET] /api/v1/quality/hemorrhage/history (计划中) - 获取历史记录
+-->
 <script setup>
 /**
- * @file Hemorrhage.vue
- * @description 头部出血 AI 智能检测视图
- * 包含影像上传、AI 实时分析动画、结果展示以及动态 BBox 标注功能。
- *
- * 对接API:
- * - predictHemorrhage: 调用后端 /api/quality/hemorrhage 接口进行影像分析
+ * @component Hemorrhage
+ * @description 头部出血检测页面逻辑控制器
  */
 import { ref, computed, reactive, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -482,14 +504,20 @@ const resetUpload = () => {
 }
 
 /**
- * 重新分析当前案例
+ * @function handleReanalyze
+ * @description 重新分析当前案例
+ *
+ * @backend-api [POST] /api/v1/quality/hemorrhage (复用分析接口)
  */
 const handleReanalyze = () => {
     startAnalysisProcess()
 }
 
 /**
- * 导出报告 (未实现)
+ * @function handleExport
+ * @description 导出报告 (未实现)
+ *
+ * @backend-api [GET] /api/v1/quality/hemorrhage/report/export (计划中)
  */
 const handleExport = () => {
     ElMessage.success('报告导出中...')
@@ -533,8 +561,11 @@ const submitUpload = async () => {
 }
 
 /**
- * 启动 AI 分析流程
+ * @function startAnalysisProcess
+ * @description 启动 AI 分析流程
  * 包含进度条模拟、API 调用和结果处理
+ *
+ * @backend-api [POST] /api/v1/quality/hemorrhage (通过 predictHemorrhage 调用)
  */
 const startAnalysisProcess = async () => {
   qcItems.value = []
@@ -623,7 +654,8 @@ const startAnalysisProcess = async () => {
 }
 
 /**
- * 处理分析结果数据
+ * @function finalizeAnalysis
+ * @description 处理分析结果数据
  * 将后端返回的数据填充到页面状态中
  * @param {Object} res - 后端响应数据
  * @param {boolean} isMock - 是否为模拟模式
@@ -633,11 +665,19 @@ const finalizeAnalysis = (res, isMock = false) => {
 
   // 填充核心指标
   hasHemorrhage.value = res.prediction === '出血'
-  hemorrhageProb.value = (res.hemorrhage_probability * 100).toFixed(1)
+  // 防止 NaN 显示
+  const prob = res.hemorrhage_probability || (res.probability ? res.probability.hemorrhage : 0)
+  hemorrhageProb.value = isNaN(prob) ? '0.0' : (prob * 100).toFixed(1)
+
   inferenceDevice.value = res.device || 'CPU' // 显示设备
   modelName.value = res.model_name
   bboxes.value = res.bboxes
-  confidenceLevel.value = res.confidence_level
+  confidenceLevel.value = res.confidence_level || res.confidence // 兼容后端不同字段名
+
+  // 设置预览图 (如果后端返回了 base64)
+  if (res.image_base64) {
+      imageUrl.value = `data:image/png;base64,${res.image_base64}`
+  }
 
   // 更新图像元数据
   imageMeta.value = { width: res.image_width || 512, height: res.image_height || 512 }
@@ -661,23 +701,494 @@ const finalizeAnalysis = (res, isMock = false) => {
       description: '检测是否存在脑实质内高密度出血灶',
       status: res.prediction === '出血' ? '异常' : '正常',
       detail: res.prediction === '出血'
-        ? `检测到疑似出血区域 (置信度: ${(res.hemorrhage_probability * 100).toFixed(1)}%)`
+        ? `检测到疑似出血区域 (置信度: ${isNaN(prob) ? '0.0' : (prob * 100).toFixed(1)}%)`
         : '未检测到明显出血灶',
     },
     {
       name: '中线偏移',
       type: 'midline',
       description: '检测脑中线结构是否发生位移',
-      status: res.midline_shift ? '异常' : '正常', // 假设后端返回了此字段
-      detail: res.midline_shift ? `检测到中线偏移 (偏移指数: ${res.shift_score})` : '中线结构居中',
+      status: res.midline_shift ? '异常' : '正常',
+      detail: res.midline_detail || (res.midline_shift ? '检测到中线偏移' : '中线结构居中'),
     },
     {
-       name: '伪影检测',
-       type: 'artifact',
-       description: '检测是否存在运动伪影或金属伪影',
-       status: '正常', // 示例默认正常
-       detail: '图像清晰，未发现明显伪影干扰',
+       name: '脑室结构',
+       type: 'ventricle',
+       description: '检测脑室系统形态及密度是否正常',
+       status: res.ventricle_issue ? '异常' : '正常',
+       detail: res.ventricle_detail || (res.ventricle_issue ? '脑室形态异常' : '脑室系统形态正常'),
     }
   ]
 }
 </script>
+
+<style scoped>
+/* 容器与整体布局 */
+.hemorrhage-qc-container {
+  padding: 24px;
+  background-color: #f5f7fa;
+  min-height: calc(100vh - 84px);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+
+.header-left .el-breadcrumb {
+  margin-bottom: 12px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  color: #303133;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-tag {
+  font-weight: normal;
+}
+
+/* 上传区域样式 */
+.upload-section {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 180px);
+  min-height: 600px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.upload-wrapper {
+  width: 100%;
+  height: 100%;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+.analyzing-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.upload-choices {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.upload-choices .el-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto !important;
+}
+
+.upload-footer {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+  color: #909399;
+  font-size: 13px;
+  text-align: center;
+}
+
+.choice-card {
+  background: #f8f9fb;
+  border: 2px solid #e4e7ed;
+  border-radius: 12px;
+  padding: 32px 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.choice-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #409eff;
+}
+
+.icon-wrapper {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  font-size: 36px;
+  transition: all 0.3s;
+}
+
+.local-upload .icon-wrapper {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.pacs-select .icon-wrapper {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.choice-card:hover .icon-wrapper {
+  transform: scale(1.1);
+}
+
+.choice-card h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: #303133;
+}
+
+.choice-card p {
+  margin: 0 0 5px;
+  color: #606266;
+  font-size: 14px;
+}
+
+.choice-card .sub-tip {
+  color: #909399;
+  font-size: 12px;
+}
+
+.upload-footer p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 分析动画样式 */
+.scan-animation-box {
+  width: 120px;
+  height: 120px;
+  border: 4px solid #409eff;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30px;
+  overflow: hidden;
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.4);
+}
+
+.scan-icon {
+  font-size: 48px;
+  color: #409eff;
+  z-index: 2;
+}
+
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: #67c23a;
+  box-shadow: 0 0 10px #67c23a;
+  animation: scanMove 1.5s linear infinite;
+  z-index: 1;
+}
+
+@keyframes scanMove {
+  0% { top: 0; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.progress-info {
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
+}
+
+.analyzing-title {
+  font-size: 20px;
+  color: #303133;
+  margin-bottom: 20px;
+}
+
+.step-display {
+  margin-top: 15px;
+  font-size: 14px;
+  color: #409eff;
+  font-weight: 500;
+}
+
+.log-window {
+  margin-top: 20px;
+  height: 120px;
+  background: #2b2b2b;
+  border-radius: 4px;
+  padding: 10px 15px;
+  text-align: left;
+  overflow-y: hidden;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+  color: #a6a9ad;
+}
+
+.log-item {
+  margin: 4px 0;
+  line-height: 1.4;
+  animation: fadeIn 0.3s ease;
+}
+
+.log-time {
+  color: #67c23a;
+  margin-right: 8px;
+}
+
+/* 结果展示样式 */
+.info-section {
+  margin-bottom: 24px;
+}
+
+.patient-card, .score-card {
+  height: 100%;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.score-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.score-value {
+  display: block;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.score-label {
+  display: block;
+  font-size: 12px;
+  color: #909399;
+}
+
+.score-summary {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.summary-result {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #606266;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 列表样式 */
+.qc-items-section {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.section-title {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.section-title h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #303133;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #909399;
+}
+
+.qc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.qc-list-item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 20px 24px;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.qc-list-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.qc-list-item.is-error {
+  border-left: 4px solid #f56c6c;
+  background: #fff5f5;
+}
+
+.qc-list-item.is-success {
+  border-left: 4px solid #67c23a;
+}
+
+.list-item-left {
+  margin-right: 24px;
+}
+
+.status-icon {
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f2f6fc;
+}
+
+.is-success .status-icon {
+  color: #67c23a;
+  background: #f0f9eb;
+}
+.is-error .status-icon {
+  color: #f56c6c;
+  background: #fef0f0;
+}
+
+.list-item-main {
+  flex: 1;
+}
+
+.item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.item-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.item-desc {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.item-detail-text {
+  font-size: 13px;
+  color: #f56c6c;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  background: rgba(245, 108, 108, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.list-item-right {
+  margin-left: 16px;
+  display: flex;
+  align-items: center;
+}
+
+/* 详情弹窗样式 */
+.detail-content {
+  padding: 10px;
+}
+
+.image-preview-wrapper {
+  background: #000;
+  height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.image-container {
+  position: relative;
+  display: inline-block;
+  line-height: 0; /* Remove extra space for inline-block */
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 400px; /* Limit height to match wrapper */
+  width: auto;
+  height: auto;
+  display: block;
+}
+
+.image-placeholder {
+  color: #909399;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.bbox-overlay {
+  pointer-events: none;
+}
+
+.bbox-label {
+  position: absolute;
+  top: -24px;
+  left: -2px;
+  background: #F56C6C;
+  color: #fff;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.detail-info {
+  height: 100%;
+}
+</style>
