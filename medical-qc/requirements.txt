@@ -1,0 +1,30 @@
+# Web 框架
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# 数据校验 —— 升级到 2.7.0（兼容 FastAPI 0.104.1）
+pydantic==2.7.0
+
+# 文件上传
+python-multipart==0.0.6
+
+# PyTorch (CUDA 12.1)
+--index-url https://download.pytorch.org/whl/cu121
+torch==2.1.0
+torchvision==0.16.0
+torchaudio==2.1.0
+
+# AI/图像
+numpy==1.26.4
+Pillow==10.0.1
+
+# 数据库
+sqlalchemy
+aiomysql
+
+# 安全
+passlib[bcrypt]
+python-jose[cryptography]
+
+# 环境
+python-dotenv

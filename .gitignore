@@ -1,0 +1,44 @@
+# General
+.DS_Store
+.idea/
+.vscode/
+*.log
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python / Backend
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Project Specific - Backend
+medical-qc/data/
+medical-qc/models/*.pth
+medical-qc/results/
+medical-qc/tests/.pytest_cache/
+medical-qc/.pytest_cache/
+
+# Node / Frontend
+node_modules/
+dist/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm/
+*.local
+
+# System
+Thumbs.db
