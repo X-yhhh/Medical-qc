@@ -90,6 +90,3 @@ npm run dev
 ## 📝 开发指南
 *   请确保 `.gitignore` 文件正确配置，避免提交敏感数据（如 `data/` 目录下的影像数据集）和临时文件。
 *   后端模型文件 (`.pth`) 默认不包含在仓库中，请联系管理员获取预训练模型并放置在 `medical-qc/app/models/` 目录下。
-
-## 📄 License
-[MIT License](LICENSE)
