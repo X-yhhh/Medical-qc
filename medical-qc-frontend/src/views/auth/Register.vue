@@ -1,7 +1,15 @@
 <template>
+  <!-- 
+    @file auth/Register.vue
+    @description 用户注册页面
+    提供新用户注册功能，包含表单验证和 API 提交。
+  -->
   <div class="auth-layout">
     <div class="auth-container">
-      <!-- Logo / 标题 -->
+      <!-- 
+        @section 页面头部
+        显示平台标题和副标题
+      -->
       <div class="auth-header">
         <h1 class="platform-title">医学影像质控平台</h1>
         <p class="subtitle">Medical Imaging Quality Control System</p>
@@ -12,6 +20,11 @@
           <h2>用户注册</h2>
         </div>
 
+        <!-- 
+          @section 注册表单
+          功能: 收集用户注册信息
+          字段: 用户名, 真实姓名, 医院, 科室, 邮箱, 密码, 确认密码
+        -->
         <el-form
           :model="form"
           :rules="rules"
@@ -127,6 +140,10 @@ import request from '@/utils/request'
 const router = useRouter()
 const registerFormRef = ref(null)
 const loading = ref(false)
+
+/**
+ * @description 表单数据模型
+ */
 const form = ref({
   username: '',
   full_name: '',
@@ -134,9 +151,13 @@ const form = ref({
   department: '',
   email: '',
   password: '',
-  confirm_password: '' // ✅ 新增字段
+  confirm_password: '' // 仅用于前端验证，不提交给后端
 })
 
+/**
+ * @description 表单验证规则
+ * 包含必填校验、邮箱格式校验、密码长度校验及两次密码一致性校验
+ */
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   full_name: [{ required: true, message: '请输入真实姓名', trigger: 'blur' }],
@@ -164,6 +185,18 @@ const rules = {
   ]
 }
 
+/**
+ * @function handleRegister
+ * @description 处理注册请求
+ * 
+ * 逻辑:
+ * 1. 验证表单数据
+ * 2. 调用 /auth/register API 提交注册信息
+ * 3. 成功后跳转至登录页
+ * 
+ * 对接API:
+ * - POST /auth/register
+ */
 const handleRegister = async () => {
   await registerFormRef.value.validate()
   loading.value = true
@@ -188,6 +221,10 @@ const handleRegister = async () => {
 </script>
 
 <style scoped>
+/* 
+  @section 样式定义
+  包含注册页面的布局、容器、表单卡片及底部版权信息的样式
+*/
 .auth-layout {
   display: flex;
   align-items: center;

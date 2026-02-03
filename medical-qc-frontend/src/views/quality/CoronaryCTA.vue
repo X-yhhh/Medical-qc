@@ -1,3 +1,21 @@
+<!--
+  @file src/views/quality/CoronaryCTA.vue
+  @description 冠脉CTA智能质控视图
+  主要功能：
+  1. 影像上传：支持本地DICOM文件夹拖拽上传和PACS系统模拟拉取。
+  2. AI智能分析：展示分析进度、当前步骤和实时日志（模拟）。
+  3. 结果展示：
+     - 患者检查信息卡片（包含冠脉CTA特有参数：心率、心率波动、重建相位等）
+     - 质控评分仪表盘
+     - 异常项汇总
+     - 详细质控检测项列表（心率控制、血管强化、血管显示等）
+  4. 详情查看：点击质控项查看详细分析结果和影像快照（Mock）。
+  
+  @api Mocks (模拟后端接口)
+  - simulatePacsSelect: 模拟从PACS系统检索影像信息
+  - startAnalysisProcess: 模拟长连接/WebSocket推送的分析流程
+  - fetchQCData: 模拟获取最终质控报告数据
+-->
 <template>
   <div class="coronary-qc-container">
     <!-- 顶部导航与操作栏 -->
@@ -335,6 +353,9 @@
 </template>
 
 <script setup>
+/**
+ * @section Imports
+ */
 import { ref, computed, onMounted, nextTick, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -354,6 +375,10 @@ import {
   ArrowLeft,
 } from '@element-plus/icons-vue'
 
+/**
+ * @section State Definitions
+ * @description 定义页面所需的状态变量
+ */
 // 模拟状态
 const analyzing = ref(false)
 const analyzeProgress = ref(0) // 进度条百分比
@@ -370,12 +395,17 @@ const uploadForm = reactive({
 })
 const selectedFile = ref(null)
 
+// 表单验证规则
 const uploadRules = {
   patientName: [{ required: true, message: '请输入患者姓名', trigger: 'blur' }],
   examId: [{ required: true, message: '请输入检查ID', trigger: 'blur' }],
 }
 
-// 打开上传弹窗
+/**
+ * @function openUploadDialog
+ * @description 打开上传对话框
+ * @param {string} mode - 上传模式 'local' 或 'pacs'
+ */
 const openUploadDialog = (mode = 'local') => {
   uploadMode.value = mode
   uploadForm.patientName = ''
@@ -384,12 +414,24 @@ const openUploadDialog = (mode = 'local') => {
   uploadDialogVisible.value = true
 }
 
-// 处理弹窗内的文件选择
+/**
+ * @function handleDialogFileChange
+ * @description 处理文件选择变更
+ * @param {File} file - 选中的文件对象
+ */
 const handleDialogFileChange = (file) => {
   selectedFile.value = file
 }
 
-// 提交上传并开始分析
+/**
+ * @function submitUpload
+ * @description 提交上传表单并触发分析流程
+ * 
+ * 逻辑:
+ * 1. 验证表单信息
+ * 2. 检查文件是否已选择 (Local 模式)
+ * 3. 关闭弹窗并调用 startAnalysisProcess
+ */
 const submitUpload = async () => {
   if (!uploadFormRef.value) return
 
@@ -418,7 +460,10 @@ const submitUpload = async () => {
 const currentAnalysisStep = ref('准备就绪')
 const analysisLogs = ref([])
 
-// 模拟 PACS 选择
+/**
+ * @function simulatePacsSelect
+ * @description 模拟从 PACS 系统选择影像
+ */
 const simulatePacsSelect = () => {
   ElMessage.success('已连接 PACS 系统，正在检索今日检查列表...')
   // 模拟从 PACS 获取到数据，弹出对话框让用户确认
@@ -436,6 +481,10 @@ const simulatePacsSelect = () => {
   }, 500) // 缩短模拟时间
 }
 
+/**
+ * @section Mock Data
+ * @description 模拟患者和质控结果数据
+ */
 // 模拟患者数据
 const patientInfo = ref({
   name: '',
@@ -457,12 +506,19 @@ const patientInfo = ref({
 // 质控项数据
 const qcItems = ref([])
 
-// 重置上传 (改为打开弹窗)
+/**
+ * @function resetUpload
+ * @description 重置上传状态，打开上传对话框
+ */
 const resetUpload = () => {
   openUploadDialog()
 }
 
-// 添加日志辅助函数
+/**
+ * @function addLog
+ * @description 向分析日志中添加一条新记录
+ * @param {string} msg - 日志消息
+ */
 const addLog = (msg) => {
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   analysisLogs.value.unshift({ time, message: msg })
@@ -470,7 +526,11 @@ const addLog = (msg) => {
   if (analysisLogs.value.length > 5) analysisLogs.value.pop()
 }
 
-// 开始分析流程
+/**
+ * @function startAnalysisProcess
+ * @description 模拟完整的 AI 分析流程
+ * 包含多个步骤：DICOM解析 -> 完整性校验 -> 元数据提取 -> 模型加载 -> 血管提取 -> 特征分析 -> 报告生成
+ */
 const startAnalysisProcess = async () => {
   // 清除旧数据，切换到分析视图
   qcItems.value = []
@@ -528,6 +588,9 @@ const startAnalysisProcess = async () => {
   await fetchQCData()
 }
 
+/**
+ * @section Computed Properties
+ */
 // 计算异常数量
 const abnormalCount = computed(() => {
   return qcItems.value.filter((item) => item.status === '不合格').length
@@ -547,7 +610,10 @@ const scoreColor = computed(() => {
   return '#F56C6C'
 })
 
-// 模拟后端 API 请求
+/**
+ * @function fetchQCData
+ * @description 模拟后端 API 请求获取质控结果
+ */
 const fetchQCData = async () => {
   analyzing.value = true
   // 模拟网络延迟 (缩短)
@@ -611,7 +677,10 @@ const fetchQCData = async () => {
   analyzing.value = false
 }
 
-// 重新分析
+/**
+ * @function handleReanalyze
+ * @description 触发重新分析流程
+ */
 const handleReanalyze = () => {
   ElMessage.info('正在请求云端 AI 重新分析...')
   fetchQCData().then(() => {
@@ -619,18 +688,31 @@ const handleReanalyze = () => {
   })
 }
 
-// 导出报告
+/**
+ * @function handleExport
+ * @description 导出质控报告
+ */
 const handleExport = () => {
   ElMessage.success('质控报告已生成并开始下载')
 }
 
-// 查看详情
+/**
+ * @function viewDetails
+ * @description 查看单个质控项的详情
+ * @param {Object} item - 选中的质控项对象
+ */
 const viewDetails = (item) => {
   currentItem.value = item
   dialogVisible.value = true
 }
 </script>
+
 <style scoped>
+/* 
+ * @section Styles
+ * @description 页面样式定义
+ */
+
 /* 容器与整体布局 */
 .coronary-qc-container {
   padding: 24px;
@@ -1047,42 +1129,47 @@ const viewDetails = (item) => {
 }
 
 .status-icon {
-  font-size: 28px;
+  font-size: 24px;
 }
 
-.qc-list-item.is-success .status-icon {
-  color: #67c23a;
-}
-
-.qc-list-item.is-error .status-icon {
+.is-error .status-icon {
   color: #f56c6c;
+}
+
+.is-success .status-icon {
+  color: #67c23a;
 }
 
 .list-item-main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .item-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 6px;
 }
 
 .item-name {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: bold;
   color: #303133;
 }
 
 .item-desc {
   font-size: 14px;
   color: #606266;
-  margin-bottom: 6px;
 }
 
 .item-detail-text {
   font-size: 13px;
+  margin-top: 4px;
+}
+
+.error-text {
   color: #f56c6c;
   display: flex;
   align-items: center;
@@ -1093,22 +1180,23 @@ const viewDetails = (item) => {
   margin-left: 20px;
 }
 
-/* 弹窗样式 */
+/* 弹窗内容 */
 .dialog-content {
-  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .mock-image-placeholder {
-  margin-top: 20px;
-  height: 200px;
-  background-color: #f0f2f5;
+  background: #000;
+  height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
 }
 
-/* 动画通用类 */
+/* 动画 */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -1117,5 +1205,16 @@ const viewDetails = (item) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

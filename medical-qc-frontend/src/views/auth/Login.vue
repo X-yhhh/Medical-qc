@@ -2,17 +2,19 @@
 <template>
   <div class="auth-layout">
     <div class="auth-container">
-      <!-- Logo / 标题 -->
+      <!-- Logo / 标题区域 -->
       <div class="auth-header">
         <h1 class="platform-title">医学影像质控平台</h1>
         <p class="subtitle">Medical Imaging Quality Control System</p>
       </div>
 
+      <!-- 登录卡片 -->
       <el-card class="auth-card" shadow="hover">
         <div class="card-header">
           <h2>用户登录</h2>
         </div>
 
+        <!-- 登录表单: 用户名/密码验证 -->
         <el-form
           :model="form"
           :rules="rules"
@@ -53,6 +55,7 @@
             </el-button>
           </el-form-item>
 
+          <!-- 底部链接 -->
           <div class="footer-links">
             <span>还没有账号？</span>
             <router-link to="/register" class="link">立即注册</router-link>
@@ -66,6 +69,15 @@
 </template>
 
 <script setup>
+/**
+ * @file auth/Login.vue
+ * @description 用户登录页面
+ * 提供用户名密码登录功能，处理 JWT Token 存储及用户状态管理。
+ * 
+ * 对接API:
+ * - login: 调用后端 /api/auth/login 接口获取 access_token
+ */
+
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -75,20 +87,31 @@ import { login } from '@/api/auth'
 const router = useRouter()
 const loginFormRef = ref(null)
 const loading = ref(false)
+
+// 表单数据模型
 const form = ref({
   username: '',
   password: '',
 })
 
+// 表单验证规则
 const rules = {
   username: [{ required: true, message: '请输入用户名或邮箱', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
+/**
+ * 处理登录请求
+ * 1. 验证表单
+ * 2. 调用 login API
+ * 3. 存储 Token 和用户信息到 sessionStorage
+ * 4. 跳转至首页
+ */
 const handleLogin = async () => {
   await loginFormRef.value.validate()
   loading.value = true
   try {
+    // 调用登录接口
     const res = await login(form.value)
     console.log('🚀 登录响应:', res)
 
@@ -96,18 +119,22 @@ const handleLogin = async () => {
       throw new Error('No token in response')
     }
 
+    // 存储 Token
     sessionStorage.setItem('access_token', res.access_token)
+    
+    // 存储用户信息 (如果后端返回)
     if (res.user && typeof res.user === 'object') {
       sessionStorage.setItem('user_info', JSON.stringify(res.user))
     } else {
       console.warn('⚠️ 后端未返回 user 字段，无法显示用户名')
     }
+    
     ElMessage.success('登录成功！')
     router.push('/')
   } catch (error) {
     console.error('❌ 登录失败:', error)
 
-    // ✅ 智能提取错误提示
+    // 智能错误提示处理
     let errorMsg = '登录失败，请稍后重试'
 
     // 优先使用后端返回的 detail
@@ -131,6 +158,7 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
+/* 登录页布局样式 */
 .auth-layout {
   display: flex;
   align-items: center;

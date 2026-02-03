@@ -1,14 +1,25 @@
 # app/services/quality_service.py
+# ----------------------------------------------------------------------------------
+# 质控服务模块 (Quality Service)
+# 作用：提供 AI 模型加载和脑出血检测的核心业务逻辑。
+# 特点：实现模型的单例模式懒加载，避免重复加载开销。
+# ----------------------------------------------------------------------------------
+
 import torch
 import os
 from typing import Optional
 
-# 全局变量，初始为 None
+# 全局变量：用于缓存加载后的模型实例
 _model: Optional[torch.nn.Module] = None
 _model_loaded = False
 _model_error: Optional[str] = None
 
 
+# ----------------------------------------------------------------------------------
+# 函数：获取/加载模型 (get_model)
+# 作用：单例模式加载 PyTorch 模型。首次调用时加载文件，后续直接返回缓存实例。
+# 异常处理：加载失败时记录错误信息，确保服务不崩溃。
+# ----------------------------------------------------------------------------------
 def get_model():
     """
     懒加载模型：首次调用时加载，之后复用
@@ -16,10 +27,12 @@ def get_model():
     """
     global _model, _model_loaded, _model_error
 
+    # 如果已尝试加载过，直接返回结果（无论成功失败）
     if _model_loaded:
         return _model, _model_error
 
     try:
+        # 构建模型文件绝对路径
         model_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "..", "..", "models", "hemorrhage_model.pth"
@@ -29,11 +42,13 @@ def get_model():
             raise FileNotFoundError(f"模型文件不存在: {model_path}")
 
         print("正在加载脑出血检测模型...")
-        # 自动选择设备：有 CUDA 用 GPU，否则用 CPU
+        # 自动选择计算设备：优先使用 GPU (CUDA)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # 加载模型权重
         model = torch.load(model_path, map_location=device)
-        model.eval()
-        model.to(device)  # 确保模型在正确设备上
+        model.eval()      # 设置为评估模式
+        model.to(device)  # 移动到指定设备
 
         _model = model
         _model_error = None
@@ -49,15 +64,22 @@ def get_model():
     return _model, _model_error
 
 
+# ----------------------------------------------------------------------------------
+# 函数：执行脑出血检测 (detect_hemorrhage)
+# 作用：调用加载的模型对输入图像进行推理。
+# 参数：image_path - 待检测图像的路径
+# 返回：包含检测结果（是否出血、置信度、BBox）的字典
+# ----------------------------------------------------------------------------------
 def detect_hemorrhage(image_path: str):
     """
     脑出血检测主函数
     即使模型加载失败，也返回明确错误信息，不中断服务
     """
+    # 1. 获取模型实例
     model, error = get_model()
 
+    # 2. 检查模型状态
     if error:
-        # 返回结构化错误，前端可识别
         return {
             "success": False,
             "error": error,
@@ -71,9 +93,11 @@ def detect_hemorrhage(image_path: str):
             "message": "模型未初始化"
         }
 
-    # TODO: 实际推理逻辑（这里模拟）
+    # 3. 执行推理 (模拟逻辑，后续需对接真实预处理和推理)
     try:
-        # 假设你有图像预处理和推理代码
+        # TODO: 添加真实的图像预处理 (Transforms) 和 model(input) 调用
+        
+        # 模拟返回结果
         result = {
             "success": True,
             "has_hemorrhage": False,

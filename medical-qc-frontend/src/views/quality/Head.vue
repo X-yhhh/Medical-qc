@@ -1,6 +1,9 @@
 <template>
   <div class="head-qc-container">
-    <!-- 顶部导航与操作栏 -->
+    <!--
+      顶部导航与操作栏
+      功能: 显示页面路径、标题及全局操作按钮
+    -->
     <div class="page-header">
       <div class="header-left">
         <el-breadcrumb separator="/">
@@ -10,12 +13,14 @@
         </el-breadcrumb>
         <h2 class="page-title">
           CT头部平扫智能质控
+          <!-- 状态标签: 根据是否有质控结果显示不同状态 -->
           <el-tag v-if="qcItems.length > 0" type="primary" effect="plain" class="status-tag"
             >AI 自动分析完成</el-tag
           >
           <el-tag v-else type="info" effect="plain" class="status-tag">等待上传影像</el-tag>
         </h2>
       </div>
+      <!-- 右侧操作按钮: 仅在有结果时显示 -->
       <div class="header-right" v-if="qcItems.length > 0">
         <el-button @click="resetUpload">
           <el-icon><Upload /></el-icon> 上传新案例
@@ -29,11 +34,14 @@
       </div>
     </div>
 
-    <!-- 1. 上传区域 (当没有数据时显示) -->
+    <!--
+      1. 上传与分析区域 (当没有质控数据时显示)
+      包含: 正在分析的动画状态、上传方式选择(本地/PACS)
+    -->
     <div v-if="qcItems.length === 0" class="upload-section">
       <div class="upload-wrapper">
-        <!-- 正在分析的状态 (覆盖在上传区域之上，或者替换它) -->
         <transition name="fade" mode="out-in">
+          <!-- 状态 A: AI 智能分析中 (显示进度条和日志) -->
           <div v-if="analyzing" class="analyzing-container" key="analyzing">
             <div class="scan-animation-box">
               <div class="scan-line"></div>
@@ -52,6 +60,7 @@
                 <span class="step-text">{{ currentAnalysisStep }}</span>
                 <span class="step-dots">...</span>
               </div>
+              <!-- 实时日志显示窗口 -->
               <div class="log-window">
                 <p v-for="(log, index) in analysisLogs" :key="index" class="log-item">
                   <span class="log-time">[{{ log.time }}]</span> {{ log.message }}
@@ -60,10 +69,10 @@
             </div>
           </div>
 
-          <!-- 上传/选择入口 -->
+          <!-- 状态 B: 上传/选择入口 (默认初始状态) -->
           <div v-else class="upload-choices" key="upload">
             <el-row :gutter="40" justify="center">
-              <!-- 本地上传卡片 -->
+              <!-- 本地上传卡片: 触发文件选择弹窗 -->
               <el-col :span="10">
                 <div class="choice-card local-upload" @click="openUploadDialog('local')">
                   <div class="icon-wrapper">
@@ -75,7 +84,7 @@
                 </div>
               </el-col>
 
-              <!-- PACS 入口卡片 -->
+              <!-- PACS 入口卡片: 模拟连接医院 PACS 系统 -->
               <el-col :span="10">
                 <div class="choice-card pacs-select" @click="simulatePacsSelect">
                   <div class="icon-wrapper">
@@ -99,10 +108,13 @@
       </div>
     </div>
 
-    <!-- 2. 结果展示区域 (当有数据时显示) -->
+    <!--
+      2. 结果展示区域 (当有质控数据时显示)
+      包含: 患者信息卡片、总体评分卡片、详细质控项列表
+    -->
     <div v-else class="result-section">
-      <!-- 患者信息与总体评分 -->
       <el-row :gutter="20" class="info-section">
+        <!-- 患者基本信息展示 -->
         <el-col :span="16">
           <el-card shadow="hover" class="patient-card">
             <template #header>
@@ -134,6 +146,8 @@
             </el-descriptions>
           </el-card>
         </el-col>
+
+        <!-- 总体评分仪表盘 -->
         <el-col :span="8">
           <el-card shadow="hover" class="score-card">
             <div class="score-content">
@@ -170,7 +184,10 @@
       </el-row>
     </div>
 
-    <!-- 质控项详情 (列表模式) -->
+    <!--
+      质控项详情列表
+      功能: 展示每一项检测指标的状态，点击可查看详情
+    -->
     <div v-if="qcItems.length > 0" class="qc-items-section">
       <div class="section-title">
         <h3>
@@ -213,6 +230,7 @@
             <div class="item-desc">
               {{ item.description }}
             </div>
+            <!-- 异常详情提示 -->
             <div class="item-detail-text" v-if="item.status === '不合格'">
               <span class="error-text"
                 ><el-icon><InfoFilled /></el-icon> {{ item.detail }}</span
@@ -220,7 +238,7 @@
             </div>
           </div>
 
-          <!-- 右侧：操作与分数 (可选) -->
+          <!-- 右侧：查看详情按钮 -->
           <div class="list-item-right">
             <el-button type="primary" link @click.stop="viewDetails(item)">
               查看详情 <el-icon class="el-icon--right"><ArrowRight /></el-icon>
@@ -230,7 +248,7 @@
       </div>
     </div>
 
-    <!-- 详情弹窗 (Mock) -->
+    <!-- 详情弹窗 (Mock展示) -->
     <el-dialog v-model="dialogVisible" :title="currentItem?.name + ' - 详情分析'" width="50%">
       <div v-if="currentItem" class="dialog-content">
         <el-descriptions border :column="1">
@@ -264,7 +282,7 @@
       </template>
     </el-dialog>
 
-    <!-- 新建案例弹窗 -->
+    <!-- 新建案例/上传弹窗 -->
     <el-dialog v-model="uploadDialogVisible" title="新建质控案例" width="500px" destroy-on-close>
       <el-form
         ref="uploadFormRef"
@@ -280,6 +298,7 @@
           <el-input v-model="uploadForm.examId" placeholder="请输入检查/住院号" />
         </el-form-item>
 
+        <!-- 本地上传模式 -->
         <el-form-item label="影像文件" required v-if="uploadMode === 'local'">
           <el-upload
             class="upload-demo"
@@ -300,6 +319,7 @@
           </el-upload>
         </el-form-item>
 
+        <!-- PACS 拉取模式 -->
         <el-form-item label="影像源" v-else>
           <el-alert title="已锁定 PACS 影像源" type="success" :closable="false" show-icon>
             <template #default> 系统将直接从服务器拉取 Accession No. 关联的影像序列。 </template>
@@ -317,19 +337,37 @@
 </template>
 
 <script setup>
+/**
+ * @file Head.vue
+ * @description CT头部平扫质控主页面
+ * 包含影像上传（本地/PACS）、AI分析进度展示、质控结果报告展示。
+ *
+ * 对接API:
+ * - 本页面目前主要使用前端模拟数据 (Mock Mode) 进行演示。
+ * - 真实场景下应调用 /api/quality/head/analyze 等接口。
+ */
+
 import { ref, computed, onMounted, nextTick, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Upload, Refresh, Download, FolderOpened, Connection, InfoFilled, Aim, Picture, UploadFilled, List, CircleCheckFilled, WarningFilled, ArrowRight, ArrowLeft } from '@element-plus/icons-vue'
 
-// 模拟状态
+// ==========================================
+// 状态定义
+// ==========================================
+
+// 分析状态控制
 const analyzing = ref(false)
 const analyzeProgress = ref(0) // 进度条百分比
-const dialogVisible = ref(false)
-const currentItem = ref(null)
+const currentAnalysisStep = ref('准备就绪')
+const analysisLogs = ref([]) // 实时日志队列
 
-// 新增：上传弹窗相关状态
+// 弹窗与详情展示
+const dialogVisible = ref(false)
+const currentItem = ref(null) // 当前查看的质控项详情
+
+// 上传弹窗相关状态
 const uploadDialogVisible = ref(false)
-const uploadMode = ref('local') // 'local' | 'pacs'
+const uploadMode = ref('local') // 上传模式: 'local' | 'pacs'
 const uploadFormRef = ref(null)
 const uploadForm = reactive({
   patientName: '',
@@ -337,73 +375,14 @@ const uploadForm = reactive({
 })
 const selectedFile = ref(null)
 
+// 表单校验规则
 const uploadRules = {
   patientName: [{ required: true, message: '请输入患者姓名', trigger: 'blur' }],
   examId: [{ required: true, message: '请输入检查ID', trigger: 'blur' }],
 }
 
-// 打开上传弹窗
-const openUploadDialog = (mode = 'local') => {
-  uploadMode.value = mode
-  uploadForm.patientName = ''
-  uploadForm.examId = ''
-  selectedFile.value = null
-  uploadDialogVisible.value = true
-}
-
-// 处理弹窗内的文件选择
-const handleDialogFileChange = (file) => {
-  selectedFile.value = file
-}
-
-// 提交上传并开始分析
-const submitUpload = async () => {
-  if (!uploadFormRef.value) return
-
-  await uploadFormRef.value.validate(async (valid) => {
-    if (valid) {
-      // 本地上传模式下，必须选择文件
-      if (uploadMode.value === 'local' && !selectedFile.value) {
-        ElMessage.warning('请上传影像文件')
-        return
-      }
-
-      // PACS 模式下，不需要文件，因为是后端拉取
-      if (uploadMode.value === 'pacs') {
-        ElMessage.info(`正在通知后端从 PACS 拉取 ID: ${uploadForm.examId} 的数据...`)
-      }
-
-      // 关闭弹窗
-      uploadDialogVisible.value = false
-      // 开始分析流程
-      await startAnalysisProcess()
-    }
-  })
-}
-
-// 分析过程相关状态
-const currentAnalysisStep = ref('准备就绪')
-const analysisLogs = ref([])
-
-// 模拟 PACS 选择
-const simulatePacsSelect = () => {
-  ElMessage.success('已连接 PACS 系统，正在检索今日检查列表...')
-  // 模拟从 PACS 获取到数据，弹出对话框让用户确认
-  setTimeout(() => {
-    uploadForm.patientName = '王某某'
-    uploadForm.examId = 'PACS_AUTO_20231024'
-    // PACS 模式不需要 selectedFile
-    selectedFile.value = null
-
-    // 打开弹窗，指定为 pacs 模式
-    uploadMode.value = 'pacs'
-    uploadDialogVisible.value = true
-
-    ElMessage.success('已自动获取 PACS 影像信息，请确认')
-  }, 500) // 缩短模拟时间
-}
-
-// 模拟患者数据
+// 质控结果数据 (模拟)
+const qcItems = ref([])
 const patientInfo = ref({
   name: '',
   gender: '',
@@ -416,33 +395,100 @@ const patientInfo = ref({
   sliceThickness: 0,
 })
 
-// 质控项数据
-const qcItems = ref([])
+// ==========================================
+// 业务逻辑函数
+// ==========================================
 
-// 重置上传 (改为打开弹窗)
-const resetUpload = () => {
-  openUploadDialog()
+/**
+ * 打开上传配置弹窗
+ * @param {string} mode - 'local' 或 'pacs'
+ */
+const openUploadDialog = (mode = 'local') => {
+  uploadMode.value = mode
+  uploadForm.patientName = ''
+  uploadForm.examId = ''
+  selectedFile.value = null
+  uploadDialogVisible.value = true
 }
 
-// 添加日志辅助函数
+/**
+ * 处理文件选择变更
+ * @param {File} file - ElementPlus upload 组件返回的文件对象
+ */
+const handleDialogFileChange = (file) => {
+  selectedFile.value = file
+}
+
+/**
+ * 提交上传并启动分析流程
+ * 验证表单 -> 模拟上传/PACS连接 -> 启动分析动画
+ */
+const submitUpload = async () => {
+  if (!uploadFormRef.value) return
+
+  await uploadFormRef.value.validate(async (valid) => {
+    if (valid) {
+      // 本地上传模式下，必须选择文件
+      if (uploadMode.value === 'local' && !selectedFile.value) {
+        ElMessage.warning('请上传影像文件')
+        return
+      }
+
+      // PACS 模式下，模拟通知后端拉取
+      if (uploadMode.value === 'pacs') {
+        ElMessage.info(`正在通知后端从 PACS 拉取 ID: ${uploadForm.examId} 的数据...`)
+      }
+
+      // 关闭弹窗
+      uploadDialogVisible.value = false
+      // 开始分析流程
+      await startAnalysisProcess()
+    }
+  })
+}
+
+/**
+ * 模拟 PACS 选择操作
+ * 演示自动填充患者信息并打开确认弹窗
+ */
+const simulatePacsSelect = () => {
+  ElMessage.success('已连接 PACS 系统，正在检索今日检查列表...')
+
+  setTimeout(() => {
+    uploadForm.patientName = '王某某'
+    uploadForm.examId = 'PACS_AUTO_20231024'
+    selectedFile.value = null
+
+    uploadMode.value = 'pacs'
+    uploadDialogVisible.value = true
+
+    ElMessage.success('已自动获取 PACS 影像信息，请确认')
+  }, 500)
+}
+
+/**
+ * 添加实时日志
+ * @param {string} msg - 日志内容
+ */
 const addLog = (msg) => {
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   analysisLogs.value.unshift({ time, message: msg })
-  // 保持日志最多 5 条
   if (analysisLogs.value.length > 5) analysisLogs.value.pop()
 }
 
-// 开始分析流程
+/**
+ * 模拟 AI 分析全流程
+ * 包含：DICOM解析 -> 完整性校验 -> 元数据提取 -> 模型加载 -> 特征提取 -> 报告生成
+ */
 const startAnalysisProcess = async () => {
-  // 清除旧数据，切换到分析视图
+  // 1. 初始化状态
   qcItems.value = []
   patientInfo.value = { name: '' }
-
   analyzing.value = true
   analyzeProgress.value = 0
   analysisLogs.value = []
 
-  // 模拟分析流程 (加速版)
+  // 2. 定义分析步骤序列
   const steps = [
     { progress: 10, msg: '正在读取 DICOM 文件头信息...', step: 'DICOM 解析' },
     { progress: 30, msg: '校验序列完整性 (240/240 slices)...', step: '完整性校验' },
@@ -457,56 +503,62 @@ const startAnalysisProcess = async () => {
     { progress: 100, msg: '分析完成', step: '完成' },
   ]
 
+  // 3. 执行步骤模拟
   for (const step of steps) {
-    // 缩短时间：200ms ~ 400ms
     await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 200))
     analyzeProgress.value = step.progress
     currentAnalysisStep.value = step.step
     addLog(step.msg)
 
-    // 在中间某个时刻填充患者数据
+    // 在元数据提取阶段填充模拟患者数据
     if (step.progress === 45) {
-      // 使用表单数据 + 模拟数据
       patientInfo.value = {
         name: uploadForm.patientName || '自动提取中...',
-        gender: Math.random() > 0.5 ? '男' : '女', // 模拟自动获取
-        age: 40 + Math.floor(Math.random() * 40), // 模拟自动获取
+        gender: Math.random() > 0.5 ? '男' : '女',
+        age: 40 + Math.floor(Math.random() * 40),
         studyId: uploadForm.examId || 'UNKNOWN',
-        accessionNumber: 'ACC' + Math.floor(Math.random() * 100000), // 模拟自动获取
-        studyDate: new Date().toLocaleString(), // 模拟自动获取
-        device: 'GE Revolution CT', // 模拟自动获取
-        sliceCount: 240, // 模拟自动获取
-        sliceThickness: 5.0, // 模拟自动获取
+        accessionNumber: 'ACC' + Math.floor(Math.random() * 100000),
+        studyDate: new Date().toLocaleString(),
+        device: 'GE Revolution CT',
+        sliceCount: 240,
+        sliceThickness: 5.0,
       }
     }
   }
 
+  // 4. 获取最终质控结果 (模拟 API 调用)
   await fetchQCData()
 }
 
-// 计算异常数量
+/**
+ * 计算逻辑
+ */
+// 异常项计数
 const abnormalCount = computed(() => {
   return qcItems.value.filter((item) => item.status === '不合格').length
 })
 
-// 计算质控分数 (简单逻辑：每个合格项得 100/总数 分，向下取整)
+// 质控总分计算 (加权算法占位，目前为简单百分比)
 const qualityScore = computed(() => {
   if (qcItems.value.length === 0) return 0
   const passed = qcItems.value.filter((item) => item.status === '合格').length
   return Math.round((passed / qcItems.value.length) * 100)
 })
 
-// 分数颜色
+// 分数颜色映射
 const scoreColor = computed(() => {
   if (qualityScore.value >= 90) return '#67C23A'
   if (qualityScore.value >= 60) return '#E6A23C'
   return '#F56C6C'
 })
 
-// 模拟后端 API 请求
+/**
+ * 获取质控数据
+ * @api [MOCK] 模拟后端返回的质控报告数据
+ * 对应真实接口: GET /api/quality/head/report
+ */
 const fetchQCData = async () => {
   analyzing.value = true
-  // 模拟网络延迟 (缩短)
   await new Promise((resolve) => setTimeout(resolve, 300))
 
   // 模拟返回数据 - CT头部平扫质控项 (10项)
@@ -576,7 +628,7 @@ const fetchQCData = async () => {
   analyzing.value = false
 }
 
-// 重新分析
+// 重新分析 (手动触发)
 const handleReanalyze = () => {
   ElMessage.info('正在请求云端 AI 重新分析...')
   fetchQCData().then(() => {
@@ -589,16 +641,21 @@ const handleExport = () => {
   ElMessage.success('质控报告已生成并开始下载')
 }
 
-// 查看详情
+// 查看详情弹窗
 const viewDetails = (item) => {
   currentItem.value = item
   dialogVisible.value = true
 }
 
-// 忽略问题
+// 忽略问题 (暂未启用)
 const ignoreIssue = (item) => {
   item.status = '合格'
   ElMessage.success(`已忽略 "${item.name}" 的异常标记`)
+}
+
+// 重置上传
+const resetUpload = () => {
+  openUploadDialog()
 }
 </script>
 

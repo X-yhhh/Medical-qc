@@ -1,6 +1,9 @@
 <template>
   <div class="summary-container">
-    <!-- 顶部导航与标题 -->
+    <!--
+      顶部导航与标题
+      功能：显示页面标题和数据更新时间
+    -->
     <div class="page-header">
       <div class="header-content">
         <div class="title-section">
@@ -10,7 +13,11 @@
       </div>
     </div>
 
-    <!-- 核心指标统计卡片 -->
+    <!--
+      核心指标统计卡片
+      功能：展示总异常数、今日新增、待处理任务、处理解决率四个核心指标
+      数据源：statsData (通过 getSummaryStats API 获取)
+    -->
     <el-row :gutter="20" class="stats-row">
       <el-col :span="6" v-for="(item, index) in statsCards" :key="index">
         <el-card shadow="hover" class="stats-card">
@@ -35,8 +42,14 @@
       </el-col>
     </el-row>
 
-    <!-- 图表分析区域 -->
+    <!--
+      图表分析区域
+      包含：
+      1. 异常趋势分析 (折线图): 支持切换近7天/近30天
+      2. 异常类型分布 (饼图): 展示不同类型异常的占比
+    -->
     <el-row :gutter="20" class="charts-section">
+      <!-- 趋势图 -->
       <el-col :span="16">
         <el-card shadow="never" class="chart-card">
           <template #header>
@@ -54,6 +67,7 @@
           <div ref="trendChartRef" class="chart-box"></div>
         </el-card>
       </el-col>
+      <!-- 分布图 -->
       <el-col :span="8">
         <el-card shadow="never" class="chart-card">
           <template #header>
@@ -69,7 +83,11 @@
       </el-col>
     </el-row>
 
-    <!-- 详细数据列表 -->
+    <!--
+      详细数据列表
+      功能：展示异常记录的详细表格，支持搜索、筛选、分页和导出
+      操作：查看详情、处理异常
+    -->
     <el-card shadow="never" class="list-card">
       <template #header>
         <div class="card-header list-header">
@@ -168,7 +186,10 @@
       </div>
     </el-card>
 
-    <!-- 详情弹窗 -->
+    <!--
+      详情弹窗
+      功能：查看单条异常记录详情，并进行处理（填写处理备注）
+    -->
     <el-dialog
       v-model="dialogVisible"
       title="异常详情处理"
@@ -239,6 +260,18 @@
 </template>
 
 <script setup>
+/**
+ * @file summary/index.vue
+ * @description 异常数据汇总看板
+ * 展示全局的质控异常数据统计、趋势图表、分布分析以及详细记录列表。
+ * 提供异常数据的查询、导出及处理功能。
+ *
+ * 对接API:
+ * - getSummaryStats: 获取顶部核心指标数据
+ * - getIssueTrend: 获取异常趋势折线图数据
+ * - getIssueDistribution: 获取异常类型分布饼图数据
+ * - getRecentIssues: 获取分页列表数据
+ */
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import dayjs from 'dayjs'
 import * as echarts from 'echarts'
@@ -250,18 +283,18 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSummaryStats, getIssueTrend, getIssueDistribution, getRecentIssues } from '@/api/summary'
 
-// 基础数据
+// --- 基础状态 ---
 const updateTime = ref(dayjs().format('YYYY-MM-DD HH:mm'))
 const loading = ref(false)
-const trendRange = ref('7')
-const searchQuery = ref('')
-const filterStatus = ref('')
+const trendRange = ref('7') // 趋势图时间范围: '7' | '30'
+const searchQuery = ref('') // 列表搜索关键词
+const filterStatus = ref('') // 列表状态筛选
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const tableData = ref([])
 
-// 统计卡片数据
+// --- 统计卡片数据 ---
 const statsData = ref({
   totalIssues: 0,
   todayIssues: 0,
@@ -269,6 +302,7 @@ const statsData = ref({
   resolutionRate: 0
 })
 
+// 计算属性：生成卡片展示配置
 const statsCards = computed(() => [
   { title: '总异常记录', value: statsData.value.totalIssues, unit: '条', icon: 'DataLine', trend: 5.2, type: 'primary' },
   { title: '今日新增', value: statsData.value.todayIssues, unit: '条', icon: 'Warning', trend: 2.1, type: 'danger' },
@@ -276,18 +310,18 @@ const statsCards = computed(() => [
   { title: '处理解决率', value: statsData.value.resolutionRate, unit: '%', icon: 'CircleCheck', trend: 1.5, type: 'success' },
 ])
 
-// 弹窗相关
+// --- 弹窗相关状态 ---
 const dialogVisible = ref(false)
 const currentRow = ref(null)
 const resolveNote = ref('')
 
-// 图表实例
+// --- ECharts 实例 ---
 const trendChartRef = ref(null)
 const pieChartRef = ref(null)
 let trendChart = null
 let pieChart = null
 
-// 初始化
+// --- 生命周期 ---
 onMounted(async () => {
   await loadAllData()
   window.addEventListener('resize', handleResize)
@@ -299,6 +333,10 @@ onUnmounted(() => {
   pieChart?.dispose()
 })
 
+/**
+ * 加载所有初始数据
+ * 并发请求以提高加载速度
+ */
 const loadAllData = async () => {
   await Promise.all([
     fetchStats(),
@@ -308,12 +346,19 @@ const loadAllData = async () => {
   ])
 }
 
+/**
+ * 处理窗口大小调整，自适应图表
+ */
 const handleResize = () => {
   trendChart?.resize()
   pieChart?.resize()
 }
 
-// API 调用
+// --- API 调用 ---
+
+/**
+ * 获取核心统计指标
+ */
 const fetchStats = async () => {
   try {
     const res = await getSummaryStats()
@@ -323,6 +368,9 @@ const fetchStats = async () => {
   }
 }
 
+/**
+ * 获取异常趋势数据并渲染图表
+ */
 const fetchTrend = async () => {
   try {
     const res = await getIssueTrend(trendRange.value)
@@ -332,6 +380,9 @@ const fetchTrend = async () => {
   }
 }
 
+/**
+ * 获取异常分布数据并渲染图表
+ */
 const fetchDistribution = async () => {
   try {
     const res = await getIssueDistribution()
@@ -341,6 +392,9 @@ const fetchDistribution = async () => {
   }
 }
 
+/**
+ * 获取分页列表数据
+ */
 const fetchList = async () => {
   loading.value = true
   try {
@@ -370,17 +424,30 @@ const fetchList = async () => {
   }
 }
 
+// --- 交互处理 ---
+
+/**
+ * 处理列表搜索/筛选
+ */
 const handleSearch = () => {
   currentPage.value = 1
   fetchList()
 }
 
+/**
+ * 导出数据
+ */
 const handleExport = () => {
   ElMessage.success('正在导出数据，请稍候...')
   // 实际项目中这里会调用导出API
 }
 
-// 图表初始化
+// --- 图表初始化逻辑 ---
+
+/**
+ * 初始化趋势折线图
+ * @param {Object} data - { dates: [], values: [] }
+ */
 const initTrendChart = (data) => {
   if (!trendChartRef.value) return
   if (!trendChart) trendChart = echarts.init(trendChartRef.value)
@@ -417,6 +484,10 @@ const initTrendChart = (data) => {
   trendChart.setOption(option)
 }
 
+/**
+ * 初始化分布饼图
+ * @param {Array} data - [{ value, name }]
+ */
 const initPieChart = (data) => {
   if (!pieChartRef.value) return
   if (!pieChart) pieChart = echarts.init(pieChartRef.value)
@@ -447,7 +518,8 @@ const initPieChart = (data) => {
   pieChart.setOption(option)
 }
 
-// 业务逻辑
+// --- 业务辅助函数 ---
+
 const getStatusType = (status) => {
   const map = {
     '待处理': 'danger',
@@ -466,18 +538,28 @@ const getPriorityType = (p) => {
   return map[p] || ''
 }
 
+/**
+ * 查看详情
+ */
 const handleView = (row) => {
   currentRow.value = { ...row }
   resolveNote.value = ''
   dialogVisible.value = true
 }
 
+/**
+ * 打开处理弹窗
+ */
 const handleResolve = (row) => {
   currentRow.value = { ...row }
   resolveNote.value = ''
   dialogVisible.value = true
 }
 
+/**
+ * 确认处理
+ * 提交处理备注并更新状态
+ */
 const confirmResolve = () => {
   if (!resolveNote.value && currentRow.value.status !== '已解决') {
     ElMessage.warning('请填写处理备注')
@@ -783,17 +865,5 @@ const confirmResolve = () => {
   flex-direction: column;
   align-items: center;
   color: #909399;
-}
-
-.image-error .el-icon {
-  font-size: 40px;
-  margin-bottom: 8px;
-}
-
-/* 响应式调整 */
-@media (max-width: 1200px) {
-  .stats-row .el-col {
-    margin-bottom: 20px;
-  }
 }
 </style>

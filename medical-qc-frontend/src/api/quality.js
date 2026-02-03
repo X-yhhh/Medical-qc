@@ -1,7 +1,19 @@
 // src/api/quality.js
-// 所有质控检测的模拟 API（未来替换为真实 axios 调用）
+// ----------------------------------------------------------------------------------
+// 质控模块前端 API (Quality API)
+// 作用：提供各类影像质控检测的接口调用。
+// 说明：目前除脑出血检测外，其他质控项使用 Mock (模拟) 数据。
+// 对接后端：/api/v1/quality
+// ----------------------------------------------------------------------------------
+
 import request from '@/utils/request'
 
+// ======================
+// 模拟接口 (Mock APIs)
+// 作用：前端演示用，暂未对接真实后端算法
+// ======================
+
+// 模拟：头部平扫质控
 export const detectHead = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -19,6 +31,7 @@ export const detectHead = (file) => {
   })
 }
 
+// 模拟：胸部平扫质控
 export const detectChestNonContrast = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -34,6 +47,7 @@ export const detectChestNonContrast = (file) => {
   })
 }
 
+// 模拟：胸部增强质控
 export const detectChestContrast = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -49,6 +63,7 @@ export const detectChestContrast = (file) => {
   })
 }
 
+// 模拟：冠脉CTA质控
 export const detectCoronaryCTA = (file) => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -64,7 +79,13 @@ export const detectCoronaryCTA = (file) => {
   })
 }
 
-// 改名为 predictHemorrhage 以匹配 Vue 组件中的导入
+// ======================
+// 真实接口 (Real APIs)
+// 作用：对接后端 AI 服务
+// ======================
+
+// 脑出血智能检测
+// 对接后端：POST /api/v1/quality/hemorrhage
 export const predictHemorrhage = async (file, metadata = {}) => {
   const formData = new FormData()
   formData.append('file', file)
@@ -72,13 +93,13 @@ export const predictHemorrhage = async (file, metadata = {}) => {
   if (metadata.examId) formData.append('exam_id', metadata.examId)
 
   try {
-    // 使用新的持久化接口
-    const response = await request.post('/quality/hemorrhage/predict', formData, {
+    // 修正：后端接口路径为 /quality/hemorrhage
+    const response = await request.post('/quality/hemorrhage', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
-    return response // request.js 已经返回 response.data
+    return response // request.js 响应拦截器已处理 data
   } catch (error) {
     console.error('脑出血检测失败:', error)
 
@@ -92,14 +113,15 @@ export const predictHemorrhage = async (file, metadata = {}) => {
   }
 }
 
+// 获取历史检测记录
+// 对接后端：待实现
 export const getHemorrhageHistory = async (limit = 20) => {
   try {
-    const response = await request.get('/quality/hemorrhage/history', {
-      params: { limit }
-    })
-    return response
+    // TODO: 后端暂未实现此接口，预留位置
+    // const response = await request.get('/quality/hemorrhage/history', { params: { limit } })
+    return { data: [] } // 临时返回空数据
   } catch (error) {
-    console.error('获取历史记录失败:', error)
-    return []
+    console.error('获取历史记录失败', error)
+    return { data: [] }
   }
 }

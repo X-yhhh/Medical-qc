@@ -1,6 +1,7 @@
+<!-- src/views/dashboard/index.vue -->
 <template>
   <div class="dashboard-container">
-    <!-- 顶部欢迎区 -->
+    <!-- 顶部欢迎区: 展示用户信息及今日待办概览 -->
     <div class="welcome-section">
       <div class="welcome-text">
         <h2>你好, XXX医生</h2>
@@ -11,7 +12,7 @@
       </div>
     </div>
 
-    <!-- 核心数据看板 -->
+    <!-- 核心数据看板: 展示关键质控指标 (目前使用静态模拟数据) -->
     <el-row :gutter="20" class="stats-row">
       <el-col :span="6" v-for="item in statsData" :key="item.title">
         <el-card shadow="hover" class="stats-card">
@@ -36,10 +37,11 @@
       </el-col>
     </el-row>
 
-    <!-- 快捷功能入口 & 风险提示 -->
+    <!-- 主体内容区: 包含快捷入口、图表和侧边栏 -->
     <el-row :gutter="20" class="main-content">
-      <!-- 左侧：快捷质控入口 -->
+      <!-- 左侧主要区域: 快捷质控入口 & 趋势图表 -->
       <el-col :span="16">
+        <!-- 快捷质控入口卡片 -->
         <el-card class="box-card" shadow="never">
           <template #header>
             <div class="card-header">
@@ -51,6 +53,7 @@
           </template>
 
           <div class="quick-access-layout">
+            <!-- 网格布局: 核心功能导航 -->
             <div class="quick-access-grid">
               <div
                 class="quick-access-item"
@@ -66,6 +69,7 @@
               </div>
             </div>
 
+            <!-- 侧边栏: 最近访问与常用操作 -->
             <div class="quick-access-sidebar">
               <div class="sidebar-title">最近访问</div>
               <div class="recent-list">
@@ -90,7 +94,7 @@
           </div>
         </el-card>
 
-        <!-- 质控趋势图表占位 (后期对接 ECharts) -->
+        <!-- 质控趋势图表区域 (预留 ECharts 挂载点) -->
         <el-card class="box-card" shadow="never" style="margin-top: 20px">
           <template #header>
             <div class="card-header">
@@ -109,9 +113,9 @@
         </el-card>
       </el-col>
 
-      <!-- 右侧：风险提示与公告 -->
+      <!-- 右侧辅助区域: 风险提示与待办事项 -->
       <el-col :span="8">
-        <!-- 风险预警 -->
+        <!-- 风险预警卡片 -->
         <el-card class="box-card risk-card" shadow="never">
           <template #header>
             <div class="card-header">
@@ -135,7 +139,7 @@
           </div>
         </el-card>
 
-        <!-- 待办事项 -->
+        <!-- 待办事项时间轴 -->
         <el-card class="box-card" shadow="never" style="margin-top: 20px">
           <template #header>
             <div class="card-header">
@@ -163,14 +167,30 @@
 </template>
 
 <script setup>
+/**
+ * @file dashboard/index.vue
+ * @description 首页仪表盘
+ * 展示核心质控数据指标、快捷功能入口、风险预警及待办事项。
+ * 
+ * 对接API说明:
+ * - 本页面目前主要使用静态模拟数据进行展示
+ * - statsData: 对应后端 /api/dashboard/stats 接口 (待开发)
+ * - riskList: 对应后端 /api/dashboard/risks 接口 (待开发)
+ * - activities: 对应后端 /api/dashboard/activities 接口 (待开发)
+ */
+
 import { ref, onMounted } from 'vue'
 import dayjs from 'dayjs'
 
-// 当前日期
+// 当前日期显示
 const currentDate = ref(dayjs().format('YYYY年MM月DD日 dddd'))
+// 图表统计周期选择 (week/month)
 const chartPeriod = ref('week')
 
-// 顶部统计数据
+/**
+ * 核心统计数据 (模拟)
+ * 用于展示今日工作量及质控评分趋势
+ */
 const statsData = [
   { title: '今日检查总量', value: 427, unit: '例', icon: 'DataLine', trend: 12.5, type: 'primary' },
   { title: 'AI 自动审核', value: 356, unit: '例', icon: 'Cpu', trend: 8.2, type: 'success' },
@@ -178,7 +198,10 @@ const statsData = [
   { title: '平均质控分', value: 94.8, unit: '分', icon: 'Trophy', trend: 1.2, type: 'info' },
 ]
 
-// 快捷入口配置 (对应五个质控页面 + 异常汇总)
+/**
+ * 快捷入口配置
+ * 配置系统各个子模块的路由跳转信息
+ */
 const quickAccessItems = [
   {
     name: 'CT头部平扫',
@@ -224,14 +247,20 @@ const quickAccessItems = [
   },
 ]
 
-// 风险提示数据
+/**
+ * 风险提示列表 (模拟)
+ * 展示最新的高风险质控问题
+ */
 const riskList = [
   { content: '发现 3 例 CT 头部扫描伪影过重，需重新扫描', time: '10:23' },
   { content: '冠脉 CTA 重建失败率上升，建议检查设备', time: '09:45' },
   { content: '急诊胸部 CT 辐射剂量超标预警', time: '08:30' },
 ]
 
-// 待办事项
+/**
+ * 待办事项列表 (模拟)
+ * 展示医生的个人待办任务
+ */
 const activities = [
   { content: '审核早班急诊报告', timestamp: '08:00', type: 'primary', color: '#409EFF' },
   { content: '参加科室质控周会', timestamp: '14:00', type: 'warning', color: '#E6A23C' },
@@ -240,6 +269,7 @@ const activities = [
 </script>
 
 <style scoped>
+/* 页面整体容器 */
 .dashboard-container {
   padding: 24px;
   background-color: #f5f7fa;

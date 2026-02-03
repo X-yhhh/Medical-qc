@@ -1,13 +1,25 @@
+# app/utils/jwt_utils.py
+# ----------------------------------------------------------------------------------
+# JWT 工具模块 (JWT Utilities)
+# 作用：提供独立的 JWT 编码和解码验证功能。
+# 注意：部分功能与 app.core.security 重叠，建议后续合并。
+# ----------------------------------------------------------------------------------
+
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
-SECRET_KEY = "your-secret-key-here"  # ⚠️ 生产环境用环境变量
+# 密钥配置 (应统一从 core.config 获取)
+SECRET_KEY = "your-secret-key-here"  
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+# ----------------------------------------------------------------------------------
+# 函数：创建 Access Token
+# 作用：生成包含过期时间的 JWT 字符串。
+# ----------------------------------------------------------------------------------
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -18,6 +30,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+# ----------------------------------------------------------------------------------
+# 函数：验证 Token
+# 作用：解码并验证 Token 的有效性（签名和过期时间）。
+# 异常：过期抛出 401，无效抛出 401。
+# ----------------------------------------------------------------------------------
 def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

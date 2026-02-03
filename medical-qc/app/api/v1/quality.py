@@ -1,4 +1,10 @@
 # app/api/v1/quality.py
+# ----------------------------------------------------------------------------------
+# 质控模块 API (Quality Control API)
+# 作用：处理影像上传和 AI 质控检测请求，特别是脑出血检测功能。
+# 对接服务：app.services.hemorrhage_ai
+# ----------------------------------------------------------------------------------
+
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,10 +18,15 @@ from io import BytesIO
 from PIL import Image
 from pydantic import BaseModel
 from typing import Optional
-from app.services.hemorrhage_ai import run_hemorrhage_detection # 确保导入了正确的函数
+from app.services.hemorrhage_ai import run_hemorrhage_detection # 核心 AI 检测逻辑
 
+# 定义 OAuth2 认证依赖，指定 Token 获取地址
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
+# ----------------------------------------------------------------------------------
+# 依赖函数：获取当前用户
+# 作用：通过 Access Token 从数据库中验证并获取当前用户信息。
+# ----------------------------------------------------------------------------------
 async def get_current_user(token: str, db: AsyncSession = Depends(get_db)):
     """验证 access_token 是否存在于数据库中"""
     result = await db.execute(select(User).where(User.access_token == token))
@@ -26,13 +37,20 @@ async def get_current_user(token: str, db: AsyncSession = Depends(get_db)):
 
 router = APIRouter()
 
-# 新增：Base64 请求体模型
+# ----------------------------------------------------------------------------------
+# 数据模型：Base64 图片上传请求体
+# 作用：定义前端通过 Base64 字符串上传图片时的参数结构。
+# ----------------------------------------------------------------------------------
 class HemorrhageBase64Request(BaseModel):
     image_base64: str
     filename: Optional[str] = "unknown.png"
 
 # ======================
-# 方式1：原始文件上传（保持兼容）
+# 方式1：原始文件上传（兼容旧版/Postman测试）
+# ======================
+# 接口：脑出血检测 (文件流)
+# URL: POST /api/v1/quality/hemorrhage
+# 作用：接收 multipart/form-data 格式的图片文件，保存为临时文件后调用 AI 模型检测。
 # ======================
 @router.post("/hemorrhage")
 async def hemorrhage_quality_file(
@@ -41,17 +59,22 @@ async def hemorrhage_quality_file(
     db: AsyncSession = Depends(get_db)
 ):
     """脑出血检测接口（文件上传方式，兼容旧前端）"""
+    # 1. 验证文件类型
     if file.content_type and not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="仅支持图像文件 (PNG/JPG)")
 
+    # 2. 保存到临时文件
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
 
     try:
+        # 3. 验证用户身份
         username = await get_current_user(token, db)
-        # 直接返回 run_hemorrhage_detection 的结果
+        
+        # 4. 调用 AI 服务进行检测
+        # 直接返回 run_hemorrhage_detection 的结果 (包含检测结果和 Base64 标注图)
         result = run_hemorrhage_detection(tmp_path)
         return result
     except HTTPException as he:
@@ -59,11 +82,16 @@ async def hemorrhage_quality_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI检测失败: {str(e)}")
     finally:
+        # 5. 清理临时文件
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 # ======================
-# 方式2：Base64 上传（新前端使用）
+# 方式2：Base64 上传（推荐新前端使用）
+# ======================
+# 接口：脑出血检测 (Base64)
+# URL: POST /api/v1/quality/hemorrhage/base64
+# 作用：接收 Base64 编码的图片数据，解码后保存为临时文件并调用 AI 模型检测。
 # ======================
 @router.post("/hemorrhage/base64")
 async def hemorrhage_quality_base64(
@@ -73,20 +101,22 @@ async def hemorrhage_quality_base64(
 ):
     """脑出血检测接口（Base64 方式，新前端使用）"""
     try:
-        # 解码 Base64
+        # 1. 解码 Base64 字符串为图像对象
         image_data = base64.b64decode(request.image_base64)
-        image = Image.open(BytesIO(image_data)).convert("L")
+        image = Image.open(BytesIO(image_data)).convert("L") # 转为灰度图处理
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"图像解码失败: {str(e)}")
 
-    # 创建临时文件
+    # 2. 保存到临时文件
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         image.save(tmp.name)
         tmp_path = tmp.name
 
     try:
+        # 3. 验证用户身份
         username = await get_current_user(token, db)
-        # 直接返回 run_hemorrhage_detection 的结果
+        
+        # 4. 调用 AI 服务进行检测
         result = run_hemorrhage_detection(tmp_path)
         return result
     except HTTPException as he:
@@ -94,149 +124,6 @@ async def hemorrhage_quality_base64(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI检测失败: {str(e)}")
     finally:
+        # 5. 清理临时文件
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
-
-# ======================
-# 备用接口（保持原样）
-# ======================
-@router.post("/detect-hemorrhage")
-async def detect_hemorrhage_api(
-    file: UploadFile = File(...),
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
-):
-    """备用接口（逻辑同上）"""
-    if file.content_type and not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="仅支持图像文件 (PNG/JPG)")
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-
-    try:
-        username = await get_current_user(token, db)
-        result = run_hemorrhage_detection(tmp_path)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI检测失败: {str(e)}")
-    finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-# ======================
-# 新增接口：匹配前端调用路径
-# ======================
-import shutil
-import uuid
-from app.models.hemorrhage_record import HemorrhageRecord
-
-# ======================
-# 新增接口：匹配前端调用路径
-# ======================
-@router.post("/hemorrhage/predict") # 这是您前端需要的路径
-async def predict_hemorrhage_new(
-    file: UploadFile = File(...),
-    patient_name: Optional[str] = Form(None),
-    exam_id: Optional[str] = Form(None),
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    新的脑出血检测接口，匹配前端调用路径 /api/v1/quality/hemorrhage/predict
-    """
-    if file.content_type and not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="仅支持图像文件 (PNG/JPG)")
-
-    # 生成永久文件名
-    file_ext = file.filename.split('.')[-1] if '.' in file.filename else "png"
-    unique_filename = f"{uuid.uuid4()}.{file_ext}"
-    save_dir = "data/hemorrhage_uploads"
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    save_path = os.path.join(save_dir, unique_filename)
-
-    try:
-        # 获取当前用户
-        result_user = await db.execute(select(User).where(User.access_token == token))
-        user = result_user.scalars().first()
-        if not user:
-            raise HTTPException(status_code=401, detail="无效凭证")
-
-        # 保存文件
-        # 确保文件指针在开头
-        await file.seek(0)
-        with open(save_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # 运行检测
-        result = run_hemorrhage_detection(save_path)
-        if not result["success"]:
-             # 如果失败，删除文件
-             if os.path.exists(save_path):
-                 os.remove(save_path)
-             raise HTTPException(status_code=500, detail=f"AI检测失败: {result.get('error', '未知错误')}")
-        
-        # 保存记录到数据库
-        new_record = HemorrhageRecord(
-            user_id=user.id,
-            image_path=save_path,
-            prediction=result["prediction"],
-            confidence_level=result["confidence_level"],
-            hemorrhage_probability=result["hemorrhage_probability"],
-            no_hemorrhage_probability=result["no_hemorrhage_probability"],
-            analysis_duration=result["duration"],
-            patient_name=patient_name or "Unknown",
-            exam_id=exam_id or "Unknown"
-        )
-        db.add(new_record)
-        await db.commit()
-        await db.refresh(new_record)
-
-        # 返回前端期望的格式
-        return {
-            "id": new_record.id,
-            "prediction": result["prediction"],
-            "hemorrhage_probability": result["hemorrhage_probability"],
-            "no_hemorrhage_probability": result["no_hemorrhage_probability"],
-            "confidence_level": result["confidence_level"],
-            "duration": result["duration"],
-            "bbox": result.get("bbox"),
-            "midline_shift": result.get("midline_shift"),
-            "shift_score": result.get("shift_score"),
-            "model_name": result.get("model_name"),
-            "device": result.get("device", "CPU"),
-            "image_width": result.get("image_width"),
-            "image_height": result.get("image_height"),
-            "image_url": f"/static/hemorrhage/{unique_filename}" # 需要在main.py挂载静态目录
-        }
-    except HTTPException:
-        # 重新抛出 FastAPI 的 HTTPException
-        if os.path.exists(save_path): # 发生异常时尝试清理
-             try: os.remove(save_path) 
-             except: pass
-        raise
-    except Exception as e:
-        if os.path.exists(save_path):
-             try: os.remove(save_path) 
-             except: pass
-        raise HTTPException(status_code=500, detail=f"AI检测失败: {str(e)}")
-
-@router.get("/hemorrhage/history")
-async def get_hemorrhage_history(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-    limit: int = 20
-):
-    """获取用户的脑出血检测历史记录"""
-    result_user = await db.execute(select(User).where(User.access_token == token))
-    user = result_user.scalars().first()
-    if not user:
-        raise HTTPException(status_code=401, detail="无效凭证")
-    
-    query = select(HemorrhageRecord).where(HemorrhageRecord.user_id == user.id).order_by(HemorrhageRecord.created_at.desc()).limit(limit)
-    result = await db.execute(query)
-    records = result.scalars().all()
-    
-    return records
