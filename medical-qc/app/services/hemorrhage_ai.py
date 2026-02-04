@@ -244,9 +244,9 @@ def run_hemorrhage_detection(image_path: str):
         # 作用：如果模型文件缺失或表现不佳，使用传统 CV 算法兜底。
         # ---------------------------
         
-        # 制作掩膜：去除头骨 (简单假设：去掉边缘 12% 的区域)
+        # 制作掩膜：去除头骨 (优化：增大边缘去除范围至 15%，防止骨骼伪影干扰)
         mask = np.zeros_like(img_arr)
-        m_x, m_y = int(w*0.12), int(h*0.12)
+        m_x, m_y = int(w*0.15), int(h*0.15)
         mask[m_y:h-m_y, m_x:w-m_x] = 1
         roi = img_arr * mask
         
@@ -268,10 +268,15 @@ def run_hemorrhage_detection(image_path: str):
             
             # 二值化
             binary = roi > threshold
+            
+            # 排除过高亮度的像素 (如 >250)，通常是残留的骨骼或金属伪影
+            # 注意：出血通常在 60-90 HU，归一化后可能在 100-200 范围，极亮通常不是出血
+            binary[roi > 250] = 0
+            
             coords = np.argwhere(binary)
             
-            # 判定：如果高亮像素点数量超过阈值 (如 20 个)，认为有出血
-            if len(coords) > 20:
+            # 判定：如果高亮像素点数量超过阈值 (提高到 50 个，减少噪点误报)，认为有出血
+            if len(coords) > 50:
                 heuristic_has_hemorrhage = True
                 
                 # 计算边界框 (BBox)
@@ -288,8 +293,13 @@ def run_hemorrhage_detection(image_path: str):
         # ---------------------------
         # 4. 决策融合：模型结果 + 启发式结果
         # ---------------------------
-        # 策略：如果模型未训练(随机) 或 模型漏检但启发式检测到明显异常 -> 采信启发式结果
-        if _model_is_random or (hemorrhage_prob < 0.5 and heuristic_has_hemorrhage):
+        # 策略调整：
+        # 1. 如果是随机模型 (无权重)，完全依赖启发式检测。
+        # 2. 如果是训练模型 (有权重)，完全依赖模型预测，启发式仅作为附加信息 (不覆盖模型结果)。
+        #    原因：启发式算法在存在骨骼伪影时容易误报，不应覆盖模型的正常判断。
+        
+        if _model_is_random:
+            # 随机模式：兜底使用启发式
             if heuristic_has_hemorrhage:
                 predicted_class = 1
                 prediction_label = "出血"
@@ -297,16 +307,20 @@ def run_hemorrhage_detection(image_path: str):
                 hemorrhage_prob = max(hemorrhage_prob, 0.85)
                 no_hemorrhage_prob = 1.0 - hemorrhage_prob
             else:
-                # 均未检测到，且模型随机 -> 判定为未出血
-                if _model_is_random:
-                     predicted_class = 0
-                     prediction_label = "未出血"
-                     hemorrhage_prob = 0.1
-                     no_hemorrhage_prob = 0.9
+                # 均未检测到 -> 判定为未出血
+                predicted_class = 0
+                prediction_label = "未出血"
+                hemorrhage_prob = 0.1
+                no_hemorrhage_prob = 0.9
         else:
-            # 正常情况：以 AI 模型结果为主
+            # 真实模型模式：优先信任 AI 模型结果
+            # 只有当模型预测结果非常不确定 (如 0.4-0.6) 时，才考虑参考启发式 (此处暂简化为完全信赖模型)
             predicted_class = 1 if hemorrhage_prob > 0.5 else 0
             prediction_label = "出血" if predicted_class == 1 else "未出血"
+            
+            # 如果模型判断正常，但启发式判断出血，记录日志但不改变结果 (避免误报)
+            if predicted_class == 0 and heuristic_has_hemorrhage:
+                logger.info("AI模型判定正常，但启发式算法检测到高亮区域 (可能是伪影)")
         
         # 计算置信度等级 (High/Medium/Low)
         max_prob = max(no_hemorrhage_prob, hemorrhage_prob)
